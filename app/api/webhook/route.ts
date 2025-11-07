@@ -23,7 +23,21 @@ export async function POST(req: Request) {
       }
     }
 
-    const body = await req.json();
+    async function readJson(req: Request) {
+      const raw = await req.text();
+      if (!raw || !raw.trim()) {
+        throw new Error("Empty body");
+      }
+      try {
+        return JSON.parse(raw);
+      } catch (e: any) {
+        // log útil para depurar JSON malformado
+        console.error("INVALID_JSON_SNIPPET", raw.slice(0, 400));
+        throw new Error(`Invalid JSON: ${e?.message || "parse error"}`);
+      }
+    }
+
+    const body = await readJson(req);
     const parsed = WebhookPayloadSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid payload", issues: parsed.error.flatten() }, { status: 400 });
@@ -98,15 +112,26 @@ export async function POST(req: Request) {
         ? Number(payload.lead_value)
         : payload.lead_value;
 
+      const cf = Array.isArray(customFields)
+        ? customFields.map((c: any) => {
+            if ('field_value' in c && (c.id || c.key)) return c;
+            if ('id' in c)  return { id: c.id,  field_value: c.value };
+            if ('key' in c) return { key: c.key, field_value: c.value };
+            return c;
+          })
+        : undefined;
+
       const opp = await upsertOpportunity({
-        contactId: contactRes.id,
-        pipelineId: pipeline.id,
-        stageId,
-        status: payload.status || undefined,
-        title: payload.opportunity_name || `${firstName ?? ""} ${lastName ?? ""}`.trim() || "Opportunity",
-        monetaryValue: Number.isFinite(leadValue as number) ? (leadValue as number) : undefined,
-        source: payload.opportunity_source || payload.source || undefined
+        contactId:        contactRes.id,
+        pipelineId:       pipeline.id,
+        pipelineStageId:  stageId, // API expects pipelineStageId
+        status:           payload.status || undefined,
+        title:            (payload.opportunity_name || `${(firstName ?? '').trim()} ${(lastName ?? '').trim()}`.trim() || 'Opportunity'),
+        monetaryValue:    Number.isFinite(leadValue as number) ? (leadValue as number) : undefined,
+        source:           payload.opportunity_source || payload.source || undefined,
+        customFields:     cf, // must be an array
       });
+
       opportunityId = opp.id;
     }
 

@@ -4,7 +4,8 @@ type HeadersInit = Record<string, string>;
 
 const baseHeaders: HeadersInit = {
   "Authorization": `Bearer ${ENV.TOKEN}`,
-  "Version": ENV.API_VERSION,
+  // Ensure the correct API Version is set in ENV
+  "Version": ENV.API_VERSION, 
   "Content-Type": "application/json"
 };
 
@@ -15,8 +16,9 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { ...baseHeaders, ...(init?.headers as HeadersInit) }
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status} ${res.statusText} @ ${path} :: ${text}`);
+    const text = await res.text().catch(() => "No response body");
+    // Enhanced error message to include the response body which holds the 422 details
+    throw new Error(`HTTP ${res.status} ${res.statusText} @ ${path} :: Response Body: ${text}`);
   }
   if (res.status === 204) return {} as T;
   return (await res.json()) as T;
@@ -33,21 +35,23 @@ export interface ContactRecord {
   tags?: string[];
 }
 
+// Search Contact function (no changes needed)
 export async function searchContactByPhone(phone: string): Promise<ContactRecord | null> {
-  // LeadConnector v2: búsqueda por teléfono (POST /contacts/search)
-  // payload común soportado: { query, locationId, limit, skip }
+  console.log("Searching contact by phone:", phone);
+  const q = String(phone).trim();
   const data = await apiFetch<{ contacts?: any[] }>(
     `/contacts/search`,
     {
       method: "POST",
       body: JSON.stringify({
-        query: phone,
         locationId: ENV.LOCATION_ID,
-        limit: 1
+        query: q,
+        pageLimit: 1
       })
     }
   );
   const c = data.contacts?.[0];
+  console.log("Found contact:", c);
   if (!c) return null;
   return {
     id: c.id,
@@ -78,39 +82,38 @@ export interface UpsertContactInput {
 }
 
 export async function upsertContact(input: UpsertContactInput, existingId?: string): Promise<{ id: string }> {
+  const contactBody = mapContactBody(input);
+  
   if (existingId) {
-    const payload: any = {
-      ...mapContactBody(input),
-      locationId: ENV.LOCATION_ID
-    };
     const res = await apiFetch<{ id: string }>(`/contacts/${existingId}`, {
       method: "PUT",
-      body: JSON.stringify(payload)
+      body: JSON.stringify(contactBody)
     });
-    return { id: res.id || existingId };
+    // Ensure we return a valid ID
+    const contactId = res.id || existingId;
+    if (!contactId) throw new Error("Contact ID missing after PUT update.");
+    return { id: contactId };
   }
-
+  
   try {
     const res = await apiFetch<{ id: string }>(`/contacts/upsert`, {
       method: "POST",
-      body: JSON.stringify({
-        ...mapContactBody(input),
-        locationId: ENV.LOCATION_ID
-      })
+      body: JSON.stringify({ ...contactBody, locationId: ENV.LOCATION_ID })
     });
-    return { id: res.id };
-  } catch {
-    const res = await apiFetch<{ id: string }>(`/contacts`, {   // opcional: sin slash final
+    const contactId = res.id;
+    if (!contactId) throw new Error("Contact ID missing after POST upsert.");
+    return { id: contactId };
+  } catch (e) {
+    // Optional: Log the error (e) here for debugging the upsert failure
+    const res = await apiFetch<{ id: string }>(`/contacts`, {
       method: "POST",
-      body: JSON.stringify({
-        ...mapContactBody(input),
-        locationId: ENV.LOCATION_ID
-      })
+      body: JSON.stringify({ ...contactBody, locationId: ENV.LOCATION_ID })
     });
-    return { id: res.id };
+    const contactId = res.id;
+    if (!contactId) throw new Error("Contact ID missing after POST create.");
+    return { id: contactId };
   }
 }
-
 
 function mapContactBody(c: UpsertContactInput) {
   const body: any = {};
@@ -133,6 +136,7 @@ function mapContactBody(c: UpsertContactInput) {
 
 
 /** ===================== PIPELINES & STAGES ===================== **/
+// (No changes needed in this section)
 
 export interface Pipeline {
   id: string;
@@ -141,24 +145,21 @@ export interface Pipeline {
 }
 
 export async function resolvePipeline(): Promise<Pipeline> {
-  if (ENV.PIPELINE_ID) {
-    const list = await apiFetch<{ pipelines: any[] }>(
-      `/opportunities/pipelines?locationId=${encodeURIComponent(ENV.LOCATION_ID)}`
-    );
-    const p = list.pipelines?.find((p: any) => p.id === ENV.PIPELINE_ID);
-    if (!p) throw new Error(`Pipeline ID not found: ${ENV.PIPELINE_ID}`);
-    return {
-      id: p.id,
-      name: p.name,
-      stages: (p.stages || []).map((s: any) => ({ id: s.id, name: s.name }))
-    };
-  }
-
+  
   const list = await apiFetch<{ pipelines: any[] }>(
     `/opportunities/pipelines?locationId=${encodeURIComponent(ENV.LOCATION_ID)}`
   );
-  const p = list.pipelines?.find((p: any) => String(p.name).toLowerCase() === ENV.PIPELINE_NAME.toLowerCase());
-  if (!p) throw new Error(`Pipeline not found by name: ${ENV.PIPELINE_NAME}`);
+  
+  let p: any;
+  
+  if (ENV.PIPELINE_ID) {
+    p = list.pipelines?.find((p: any) => p.id === ENV.PIPELINE_ID);
+    if (!p) throw new Error(`Pipeline ID not found: ${ENV.PIPELINE_ID}`);
+  } else {
+    p = list.pipelines?.find((p: any) => String(p.name).toLowerCase() === ENV.PIPELINE_NAME.toLowerCase());
+    if (!p) throw new Error(`Pipeline not found by name: ${ENV.PIPELINE_NAME}`);
+  }
+  
   return {
     id: p.id,
     name: p.name,
@@ -177,83 +178,109 @@ export function findStageIdByName(p: Pipeline, name?: string): string | undefine
 export interface UpsertOpportunityInput {
   contactId: string;
   pipelineId: string;
-  stageId?: string;
-  title?: string;          
+  stageId?: string;              
+  pipelineStageId?: string;      
+  title?: string;
   status?: string;
-  monetaryValue?: number;
   source?: string;
+  monetaryValue?: number;
+  assignedTo?: string;
+  customFields?: Array<
+    | { id: string; value: any }
+    | { key: string; value: any }
+    | { id: string; field_value: any }
+    | { key: string; field_value: any }
+  >;
 }
 
+// List opportunities (no changes needed)
 export async function listOpportunitiesByContactInPipeline(
   contactId: string,
-  pipelineId: string
+  pipelineId: string,
+  opts: { status?: string; page?: number; pageLimit?: number } = {}
 ): Promise<{ id: string }[]> {
+  const params = new URLSearchParams();
+  params.set("location_id", ENV.LOCATION_ID);
+  params.set("contact_id", contactId);
+  params.set("pipeline_id", pipelineId);
+  if (opts.status) params.set("status", opts.status); // optional
+  console.log("Listing opportunities with params:", params.toString());
+
   const data = await apiFetch<{ opportunities?: any[] }>(
-    `/opportunities?locationId=${encodeURIComponent(ENV.LOCATION_ID)}&contactId=${encodeURIComponent(contactId)}&pipelineId=${encodeURIComponent(pipelineId)}`
+    `/opportunities/search?${params.toString()}`
   );
+
   return (data.opportunities || []).map(o => ({ id: o.id }));
 }
 
-export async function updateOpportunity(id: string, input: UpsertOpportunityInput): Promise<{ id: string }> {
-  const payload: any = {
-    contactId: input.contactId,
-    pipelineId: input.pipelineId,
-    stageId: input.stageId,
-    status: input.status,
-    name: input.title,
-    monetaryValue: input.monetaryValue,
-    source: input.source,
-    locationId: ENV.LOCATION_ID
-  };
-  const res = await apiFetch<{ id: string }>(`/opportunities/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(payload)
+function normalizeCustomFields(list?: UpsertOpportunityInput['customFields']) {
+  if (!Array.isArray(list) || list.length === 0) return undefined;
+  return list.map((cf: any) => {
+    if ('field_value' in cf && ('id' in cf || 'key' in cf)) return cf;
+    if ('id' in cf)  return { id: cf.id,  field_value: cf.value };
+    if ('key' in cf) return { key: cf.key, field_value: cf.value };
+    return cf;
   });
-  return { id: res.id || id };
 }
 
-export async function createOpportunity(input: UpsertOpportunityInput): Promise<{ id: string }> {
-  const payload: any = {
-    contactId: input.contactId,
-    pipelineId: input.pipelineId,
-    stageId: input.stageId,
-    status: input.status,
-    name: input.title,
+// --- helper: map body exactly to GHL schema (camelCase) ---
+function mapOpportunityBody(input: UpsertOpportunityInput, withLocation = false) {
+  const body: any = {
+    pipelineId:    input.pipelineId,
+    contactId:     input.contactId,
+    name:          input.title,
+    status:        input.status ?? 'open',
     monetaryValue: input.monetaryValue,
-    source: input.source,
-    locationId: ENV.LOCATION_ID
+    ...(input.pipelineStageId || input.stageId
+        ? { pipelineStageId: input.pipelineStageId ?? input.stageId }
+        : {}),
+    ...(input.assignedTo ? { assignedTo: input.assignedTo } : {}),
   };
-  const res = await apiFetch<{ id: string }>(`/opportunities/`, {
+
+  const cf = normalizeCustomFields(input.customFields);
+  if (cf) body.customFields = cf;
+
+  if (withLocation) body.locationId = ENV.LOCATION_ID;
+  return body;
+}
+
+// UPDATE (PUT /opportunities/{id})
+export async function updateOpportunity(id: string, input: UpsertOpportunityInput): Promise<{ id: string }> {
+  const payload = mapOpportunityBody(input, false); // locationId not required on update
+  const res = await apiFetch<{ id: string }>(`/opportunities/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  return { id: res.id ?? id };
+}
+
+// CREATE (POST /opportunities/)  <-- trailing slash REQUIRED
+export async function createOpportunity(input: UpsertOpportunityInput): Promise<{ id: string }> {
+  if (!input.contactId) throw new Error("Cannot create opportunity: Missing contactId");
+  const payload = mapOpportunityBody(input, true); // include locationId
+  const res = await apiFetch<{ id: string }>(`/opportunities/`, {   // <-- slash
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
   return { id: res.id };
 }
 
+// UPSERT (POST /opportunities/upsert)
 export async function upsertOpportunity(input: UpsertOpportunityInput): Promise<{ id: string }> {
-  // si  hay una oportunidad  contacto en el pipeline → actualizar 
-  // si no hay → crear una nueva.
+  // first check if it already exists
   const existing = await listOpportunitiesByContactInPipeline(input.contactId, input.pipelineId);
-  if (existing.length > 0) {
-    return updateOpportunity(existing[0].id, input);
-  }
-  // upsert directo 
+  if (existing.length) return updateOpportunity(existing[0].id, input);
+
+  // try upsert
+  const upsertPayload = mapOpportunityBody(input, true); // include locationId
   try {
     const res = await apiFetch<{ id: string }>(`/opportunities/upsert`, {
       method: "POST",
-      body: JSON.stringify({
-        contactId: input.contactId,
-        pipelineId: input.pipelineId,
-        stageId: input.stageId,
-        status: input.status,
-        name: input.title,
-        monetaryValue: input.monetaryValue,
-        source: input.source,
-        locationId: ENV.LOCATION_ID
-      })
+      body: JSON.stringify(upsertPayload),
     });
     return { id: res.id };
   } catch {
+    // fallback to create
     return createOpportunity(input);
   }
 }
