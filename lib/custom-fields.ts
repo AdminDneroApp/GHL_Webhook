@@ -28,6 +28,12 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+function normalizeKey(s: string): string {
+  return s
+    ? s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")
+    : "";
+}
+
 async function loadContactFields(): Promise<Map<string, CF>> {
   if (CF_CACHE.contact && CF_CACHE.loaded) return CF_CACHE.contact;
   const data = await apiFetch<{ customFields?: CF[] }>(
@@ -36,7 +42,10 @@ async function loadContactFields(): Promise<Map<string, CF>> {
   const map = new Map<string, CF>();
   for (const f of data.customFields || []) {
     if (String(f.model).toLowerCase() === "contact") {
-      map.set(f.name.toLowerCase(), f);
+      const raw = (f.name || "").toLowerCase();
+      const norm = normalizeKey(f.name || "");
+      map.set(raw, f);
+      if (norm && norm !== raw) map.set(norm, f);
     }
   }
   CF_CACHE.contact = map;
@@ -75,6 +84,8 @@ function normalizeCustomValue(raw: unknown, dataType?: string): any {
       "CHECKBOXES",
       "MULTI_SELECT",
       "SELECT_MULTI",
+      "MULTIPLE_OPTIONS", 
+      "TEXTBOX_LIST",   
     ]);
     return dataType && multiTypes.has(dataType.toUpperCase())
       ? trimmed
@@ -92,31 +103,34 @@ function normalizeCustomValue(raw: unknown, dataType?: string): any {
 }
 
 export async function mapCustomFieldsFromPayload(payload: Record<string, any>) {
-  const map = await loadContactFields();
-  const out: { id: string; value: any }[] = [];
+const map = await loadContactFields();
+const out: { id: string; value: any }[] = [];
+const seen = new Set<string>(); // avoid duplicates across root/customData
 
-  // 1) root-level custom keys
-  for (const [k, v] of Object.entries(payload)) {
-    const keyLc = k.toLowerCase();
-    if (STANDARD_KEYS.has(keyLc)) continue; 
-    const cf = map.get(keyLc);
+// 1) root-level custom keys
+for (const [k, v] of Object.entries(payload)) {
+  const keyLc = k.toLowerCase();
+  if (STANDARD_KEYS.has(keyLc)) continue;
+  const cf = map.get(keyLc) || map.get(normalizeKey(k));
+  if (!cf) continue;
+  const value = normalizeCustomValue(v, cf.dataType);
+  if (value === undefined || seen.has(cf.id)) continue;
+  out.push({ id: cf.id, value });
+  seen.add(cf.id);
+}
+
+// 2) customData block
+const customData = payload?.customData;
+if (customData && typeof customData === "object") {
+  for (const [k, v] of Object.entries(customData)) {
+    const cf = map.get(k.toLowerCase()) || map.get(normalizeKey(k));
     if (!cf) continue;
     const value = normalizeCustomValue(v, cf.dataType);
-    if (value === undefined) continue;
+    if (value === undefined || seen.has(cf.id)) continue;
     out.push({ id: cf.id, value });
+    seen.add(cf.id);
   }
-
-  // 2) customData block 
-  const customData = payload?.customData;
-  if (customData && typeof customData === "object") {
-    for (const [k, v] of Object.entries(customData)) {
-      const cf = map.get(k.toLowerCase());
-      if (!cf) continue;
-      const value = normalizeCustomValue(v, cf.dataType);
-      if (value === undefined) continue;
-      out.push({ id: cf.id, value });
-    }
-  }
+}
 
   const overrideJson = process.env.CUSTOM_FIELD_MAP_JSON;
   if (overrideJson) {
