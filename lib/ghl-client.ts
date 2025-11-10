@@ -284,3 +284,81 @@ export async function upsertOpportunity(input: UpsertOpportunityInput): Promise<
     return createOpportunity(input);
   }
 }
+
+/** ===================== CONTACT NOTES ===================== **/
+
+export interface ContactNote {
+  id: string;
+  body?: string;
+  title?: string;
+  pinned?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  userId?: string;
+}
+
+export interface ListNotesOptions {
+  pageLimit?: number;
+  startAfterId?: string; 
+}
+
+/** GET /contacts/:contactId/notes */
+export async function listContactNotes(
+  contactId: string,
+  opts: ListNotesOptions = {}
+): Promise<ContactNote[]> {
+  const params = new URLSearchParams();
+  if (opts.pageLimit) params.set("pageLimit", String(opts.pageLimit));
+  if (opts.startAfterId) params.set("startAfterId", opts.startAfterId);
+
+  const path =
+    `/contacts/${encodeURIComponent(contactId)}/notes` +
+    (params.toString() ? `?${params.toString()}` : "");
+
+  const data = await apiFetch<{ notes?: any[] }>(path);
+  return (data.notes ?? []).map(n => ({
+    id: n.id,
+    body: n.body,
+    title: n.title,
+    pinned: n.pinned,
+    createdAt: n.createdAt,
+    updatedAt: n.updatedAt,
+    userId: n.userId,
+  }));
+}
+
+/** POST /contacts/:contactId/notes */
+export interface CreateContactNoteInput {
+  body: string;
+  title?: string;
+  pinned?: boolean;
+  [k: string]: any;
+}
+
+export interface CreateContactNoteInput {
+  body: string;         // required
+  userId?: string;      // optional (author)
+}
+
+export async function createContactNote(
+  contactId: string,
+  input: CreateContactNoteInput
+): Promise<{ id: string }> {
+  const bodyText = (input?.body || "").trim();
+  if (!bodyText) throw new Error("Cannot create note: 'body' is required");
+
+  const payload: any = { body: bodyText };
+  if (input.userId) payload.userId = input.userId; 
+
+  const res = await apiFetch<{ id?: string; note?: { id?: string } }>(
+    `/contacts/${encodeURIComponent(contactId)}/notes`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+
+  const id = res.id ?? res.note?.id;
+  if (!id) throw new Error("Create note succeeded but no note id returned");
+  return { id };
+}

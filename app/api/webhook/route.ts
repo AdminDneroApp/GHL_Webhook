@@ -7,7 +7,8 @@ import {
   upsertContact,
   resolvePipeline,
   findStageIdByName,
-  upsertOpportunity
+  upsertOpportunity,
+  createContactNote 
 } from "@lib/ghl-client";
 import { mapCustomFieldsFromPayload } from "@lib/custom-fields";
 
@@ -15,6 +16,24 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+
+  function pickNoteBody(p: any): string | undefined {
+    const cands = [p.note_body, p.noteBody, p.note, p.note_text, p.noteText, p.contact_note, p.contactNote];
+    for (const v of cands) {
+      const s = typeof v === "string" ? v.trim() : "";
+      if (s) return s;
+    }
+    return undefined;
+  }
+
+  function pickNoteUserId(p: any): string | undefined {
+    const cands = [p.note_user_id, p.noteUserId, p.user_id, p.userId, p.owner_id, p.ownerId];
+    for (const v of cands) {
+      const s = typeof v === "string" ? v.trim() : "";
+      if (s) return s;
+    }
+    return undefined;
+  }
   try {
     if (ENV.WEBHOOK_TOKEN) {
       const token = req.headers.get("x-webhook-token");
@@ -135,10 +154,19 @@ export async function POST(req: Request) {
       opportunityId = opp.id;
     }
 
+    let noteId: string | null = null;
+    const noteBody = pickNoteBody(payload);
+    if (noteBody) {
+      const userId = pickNoteUserId(payload);
+      const res = await createContactNote(contactRes.id, { body: noteBody, ...(userId ? { userId } : {}) });
+      noteId = res.id;
+    }
+
     return NextResponse.json({
       processed: true,
       contactId: contactRes.id,
-      opportunityId
+      opportunityId,
+      noteId
     });
   } catch (err: any) {
     console.error("WEBHOOK_ERROR", { message: err?.message, stack: err?.stack });
