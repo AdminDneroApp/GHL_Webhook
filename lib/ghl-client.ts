@@ -362,3 +362,22 @@ export async function createContactNote(
   if (!id) throw new Error("Create note succeeded but no note id returned");
   return { id };
 }
+
+/** ===================== DNERO WEB ===================== **/
+export async function upsertContactAtLocation(
+  locationId: string,
+  input: { firstName?: string; lastName?: string; phone?: string; email?: string }
+): Promise<{ id: string }> {
+  const body = mapContactBody({
+    email: input.email,
+    phone: input.phone,
+    firstName: input.firstName,
+    lastName: input.lastName,
+  });
+  const res = await apiFetch<{ id: string }>(`/contacts/upsert`, {
+    method: "POST",
+    body: JSON.stringify({ ...body, locationId }),
+  });
+  if (!res.id) throw new Error("Contact ID missing after upsert at custom location.");
+  return { id: res.id };
+}

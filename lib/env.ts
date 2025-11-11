@@ -30,8 +30,12 @@ export const ENV = {
 
   // Seguridad opcional del webhook
   WEBHOOK_TOKEN: process.env.WEBHOOK_TOKEN || "",
+  
+  // DneroWeb Location ID
+  DNEROWEB_LOCATION_ID: process.env.DNEROWEB_LOCATION_ID || "",
 
   // Opcionales
   DEFAULT_STAGE_NAME: process.env.DEFAULT_STAGE_NAME?.trim() || "New Lead",
-  DEFAULT_COUNTRY: process.env.DEFAULT_COUNTRY?.trim() || "US"
+  DEFAULT_COUNTRY: process.env.DEFAULT_COUNTRY?.trim() || "US",
+  DNEROWEB_TOKEN: process.env.DNEROWEB_TOKEN || "",
 };
