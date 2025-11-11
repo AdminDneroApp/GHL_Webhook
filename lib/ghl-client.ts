@@ -9,11 +9,17 @@ const baseHeaders: HeadersInit = {
   "Content-Type": "application/json"
 };
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+const dneroWebHeaders: HeadersInit = {
+  "Authorization": `Bearer ${ENV.DNEROWEB_ACCESS_TOKEN}`,
+  "Content-Type": "application/json",
+  "Version": ENV.API_VERSION,
+}
+
+async function apiFetch<T>(path: string, init?: RequestInit, useDneroWebHeaders = false): Promise<T> {
   const url = `${ENV.BASE_URL}${path}`;
   const res = await fetch(url, {
     ...init,
-    headers: { ...baseHeaders, ...(init?.headers as HeadersInit) }
+    headers: { ...(useDneroWebHeaders ? dneroWebHeaders : baseHeaders), ...(init?.headers as HeadersInit) }
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "No response body");
@@ -377,7 +383,8 @@ export async function upsertContactAtLocation(
   const res = await apiFetch<{ id: string }>(`/contacts/upsert`, {
     method: "POST",
     body: JSON.stringify({ ...body, locationId }),
-  });
+    
+  }, true);
   if (!res.id) throw new Error("Contact ID missing after upsert at custom location.");
   return { id: res.id };
 }

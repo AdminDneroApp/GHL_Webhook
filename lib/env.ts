@@ -16,6 +16,7 @@ function first(...names: string[]): string | undefined {
 export const ENV = {
   // Token: prioridad a LC_ACCESS_TOKEN / GHL_TOKEN, fallback al previo GHL_C2_API_KEY
   TOKEN: first("LC_ACCESS_TOKEN", "GHL_TOKEN", "GHL_C2_API_KEY") ?? must("GHL_C2_API_KEY"),
+  DNEROWEB_ACCESS_TOKEN: process.env.DNEROWEB_ACCESS_TOKEN || "",
 
   // Base API y versión
   BASE_URL: process.env.GHL_BASE_URL?.trim() || "https://services.leadconnectorhq.com",
