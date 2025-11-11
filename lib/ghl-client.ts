@@ -17,6 +17,7 @@ const dneroWebHeaders: HeadersInit = {
 
 async function apiFetch<T>(path: string, init?: RequestInit, useDneroWebHeaders = false): Promise<T> {
   const url = `${ENV.BASE_URL}${path}`;
+  console.log('using headers:', useDneroWebHeaders ? dneroWebHeaders : baseHeaders);
   const res = await fetch(url, {
     ...init,
     headers: { ...(useDneroWebHeaders ? dneroWebHeaders : baseHeaders), ...(init?.headers as HeadersInit) }
