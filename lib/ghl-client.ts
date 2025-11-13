@@ -305,7 +305,7 @@ export async function searchContactAtLocation(
       query: String(query).trim(),
       pageLimit: 1,
     }),
-  });
+  }, true);
   const c = data.contacts?.[0];
   if (!c) return null;
   return {
@@ -355,7 +355,7 @@ export async function listContactNotes(
     createdAt: n.createdAt,
     updatedAt: n.updatedAt,
     userId: n.userId,
-  }));
+  }), true);
 }
 
 /** POST /contacts/:contactId/notes */
@@ -386,7 +386,8 @@ export async function createContactNote(
     {
       method: "POST",
       body: JSON.stringify(payload),
-    }
+      
+    }, true
   );
 
   const id = res.id ?? res.note?.id;
@@ -411,7 +412,7 @@ export async function upsertContactAtLocation(
     const res = await apiFetch<any>(`/contacts/upsert`, {
       method: "POST",
       body: JSON.stringify({ ...body, locationId }),
-    });
+    }, true);
     const upsertId = res?.id ?? res?.contact?.id ?? res?.contactId ?? res?.data?.id;
     if (upsertId) return { id: upsertId };
   } catch (e) {
@@ -423,7 +424,7 @@ export async function upsertContactAtLocation(
     const res = await apiFetch<any>(`/contacts`, {
       method: "POST",
       body: JSON.stringify({ ...body, locationId }),
-    });
+    }, true);
     const createId = res?.id ?? res?.contact?.id ?? res?.contactId ?? res?.data?.id;
     if (createId) return { id: createId };
   } catch (e) {
