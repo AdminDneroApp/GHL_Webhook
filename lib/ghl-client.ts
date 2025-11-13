@@ -294,6 +294,30 @@ export async function upsertOpportunity(input: UpsertOpportunityInput): Promise<
 
 /** ===================== CONTACT NOTES ===================== **/
 
+export async function searchContactAtLocation(
+  locationId: string,
+  query: string
+): Promise<ContactRecord | null> {
+  const data = await apiFetch<{ contacts?: any[] }>(`/contacts/search`, {
+    method: "POST",
+    body: JSON.stringify({
+      locationId,
+      query: String(query).trim(),
+      pageLimit: 1,
+    }),
+  });
+  const c = data.contacts?.[0];
+  if (!c) return null;
+  return {
+    id: c.id,
+    email: c.email,
+    phone: c.phone,
+    firstName: c.firstName,
+    lastName: c.lastName,
+    tags: Array.isArray(c.tags) ? c.tags : [],
+  };
+}
+
 export interface ContactNote {
   id: string;
   body?: string;
@@ -381,11 +405,37 @@ export async function upsertContactAtLocation(
     firstName: input.firstName,
     lastName: input.lastName,
   });
-  const res = await apiFetch<{ id: string }>(`/contacts/upsert`, {
-    method: "POST",
-    body: JSON.stringify({ ...body, locationId }),
-    
-  }, true);
-  if (!res.id) throw new Error("Contact ID missing after upsert at custom location.");
-  return { id: res.id };
+
+  // 1) Try UPSERT
+  try {
+    const res = await apiFetch<any>(`/contacts/upsert`, {
+      method: "POST",
+      body: JSON.stringify({ ...body, locationId }),
+    });
+    const upsertId = res?.id ?? res?.contact?.id ?? res?.contactId ?? res?.data?.id;
+    if (upsertId) return { id: upsertId };
+  } catch (e) {
+    // fall through to CREATE
+  }
+
+  // 2) Fallback to CREATE
+  try {
+    const res = await apiFetch<any>(`/contacts`, {
+      method: "POST",
+      body: JSON.stringify({ ...body, locationId }),
+    });
+    const createId = res?.id ?? res?.contact?.id ?? res?.contactId ?? res?.data?.id;
+    if (createId) return { id: createId };
+  } catch (e) {
+    // continue to search fallback
+  }
+
+  // 3) Final fallback: SEARCH (prefer phone, then email)
+  const q = input.phone?.trim() || input.email?.trim();
+  if (q) {
+    const found = await searchContactAtLocation(locationId, q);
+    if (found?.id) return { id: found.id };
+  }
+
+  throw new Error("Contact ID missing after upsert/create at custom location.");
 }
