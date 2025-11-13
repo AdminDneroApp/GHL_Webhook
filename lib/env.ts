@@ -39,4 +39,5 @@ export const ENV = {
   DEFAULT_STAGE_NAME: process.env.DEFAULT_STAGE_NAME?.trim() || "New Lead",
   DEFAULT_COUNTRY: process.env.DEFAULT_COUNTRY?.trim() || "US",
   DNEROWEB_TOKEN: process.env.DNEROWEB_TOKEN || "",
+  CORS_ORIGINS: process.env.CORS_ORIGINS || "",
 };

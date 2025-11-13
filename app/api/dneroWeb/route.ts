@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ENV } from "@lib/env";
 import { normalizePhone } from "@lib/phone";
 import { upsertContactAtLocation } from "@lib/ghl-client";
+import { corsHeaders, pickAllowedOrigin } from "@lib/cors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,22 +15,29 @@ const Schema = z.object({
   email:     z.string().email().trim().optional(),
 });
 
+export async function OPTIONS(req: Request) {
+  const origin = pickAllowedOrigin(req);
+  return new Response(null, { status: 204, headers: corsHeaders(origin) });
+}
+
 export async function POST(req: Request) {
   try {
+    const origin = pickAllowedOrigin(req);
+    const headers = corsHeaders(origin);
     // Optional protection header
     if (ENV.DNEROWEB_TOKEN) {
       const token = req.headers.get("x-dneroweb-token");
       if (token !== ENV.DNEROWEB_TOKEN) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
       }
     }
 
     const raw = await req.text();
-    if (!raw?.trim()) return NextResponse.json({ error: "Empty body" }, { status: 400 });
+    if (!raw?.trim()) return new Response(JSON.stringify({ error: "Empty body" }), { status: 400, headers });
 
     let data: unknown;
-    try { data = JSON.parse(raw); } 
-    catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
+    try { data = JSON.parse(raw); }
+    catch { return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers }); }
 
     const parsed = Schema.safeParse(data);
     if (!parsed.success) {
@@ -51,9 +59,10 @@ export async function POST(req: Request) {
       firstName, lastName, phone: phone || undefined, email,
     });
 
-    return NextResponse.json({ id: res.id });
+    return new Response(JSON.stringify({ id: res.id }), { status: 200, headers });
   } catch (err: any) {
+    const headers = corsHeaders(pickAllowedOrigin(req));
     console.error("DNEROWEB_ERROR", err?.message || err);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return new Response(JSON.stringify({ error: "Internal error" }), { status: 500, headers });
   }
 }
