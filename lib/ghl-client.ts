@@ -391,6 +391,7 @@ export async function createContactNote(
   );
 
   const id = res.id ?? res.note?.id;
+  console.log("Created contact note with ID:", id);
   if (!id) throw new Error("Create note succeeded but no note id returned");
   return { id };
 }
@@ -405,6 +406,7 @@ export async function upsertContactAtLocation(
     phone: input.phone,
     firstName: input.firstName,
     lastName: input.lastName,
+    tags: [],
   });
 
   // 1) Try UPSERT
