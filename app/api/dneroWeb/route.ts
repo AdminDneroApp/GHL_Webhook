@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid payload", issues: parsed.error.flatten() }, { status: 400 });
     }
 
-    const { firstName, lastName } = parsed.data;
+    const { firstName, lastName, tags } = parsed.data;
     const phone = normalizePhone(parsed.data.phone, ENV.DEFAULT_COUNTRY as any);
     const email = parsed.data.email;
 
@@ -57,8 +57,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Server missing DNEROWEB_LOCATION_ID" }, { status: 500 });
     }
 
+    console.log("Upserting DneroWeb contact:", { firstName, lastName, phone, email, tags });
+
     const res = await upsertContactAtLocation(ENV.DNEROWEB_LOCATION_ID, {
-      firstName, lastName, phone: phone || undefined, email,
+      firstName,
+      lastName,
+      phone: phone || undefined,
+      email,
+      tags,
     });
 
     return new Response(JSON.stringify({ id: res.id }), { status: 200, headers });
