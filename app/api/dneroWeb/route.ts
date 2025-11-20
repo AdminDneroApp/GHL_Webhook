@@ -13,6 +13,7 @@ const Schema = z.object({
   lastName:  z.string().trim().optional(),
   phone:     z.string().trim().optional(),
   email:     z.string().email().trim().optional(),
+  tags:      z.array(z.string().trim()).optional(),
 });
 
 export async function OPTIONS(req: Request) {
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
     catch { return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers }); }
 
     const parsed = Schema.safeParse(data);
+    console.log("DNEROWEB_PAYLOAD", JSON.stringify(data));
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid payload", issues: parsed.error.flatten() }, { status: 400 });
     }
