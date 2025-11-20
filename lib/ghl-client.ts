@@ -399,14 +399,14 @@ export async function createContactNote(
 /** ===================== DNERO WEB ===================== **/
 export async function upsertContactAtLocation(
   locationId: string,
-  input: { firstName?: string; lastName?: string; phone?: string; email?: string }
+  input: { firstName?: string; lastName?: string; phone?: string; email?: string , tags?: string[] }
 ): Promise<{ id: string }> {
   const body = mapContactBody({
     email: input.email,
     phone: input.phone,
     firstName: input.firstName,
     lastName: input.lastName,
-    tags: [],
+    tags: input.tags || [],
   });
 
   // 1) Try UPSERT
@@ -419,6 +419,7 @@ export async function upsertContactAtLocation(
     if (upsertId) return { id: upsertId };
   } catch (e) {
     // fall through to CREATE
+    console.warn("Upsert failed, falling back to create:", e);
   }
 
   // 2) Fallback to CREATE
@@ -431,13 +432,16 @@ export async function upsertContactAtLocation(
     if (createId) return { id: createId };
   } catch (e) {
     // continue to search fallback
+    console.warn("Create failed, falling back to search:", e);
   }
 
   // 3) Final fallback: SEARCH (prefer phone, then email)
   const q = input.phone?.trim() || input.email?.trim();
   if (q) {
+    console.log("Searching contact at location with query:", q);
     const found = await searchContactAtLocation(locationId, q);
     if (found?.id) return { id: found.id };
+    console.warn("Search fallback failed to find contact:", q);
   }
 
   throw new Error("Contact ID missing after upsert/create at custom location.");
