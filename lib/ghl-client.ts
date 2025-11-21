@@ -408,6 +408,7 @@ export async function upsertContactAtLocation(
     lastName: input.lastName,
     tags: input.tags || [],
   });
+  console.log("Upserting contact at location:", locationId, body);
 
   // 1) Try UPSERT
   try {
@@ -415,6 +416,7 @@ export async function upsertContactAtLocation(
       method: "POST",
       body: JSON.stringify({ ...body, locationId }),
     }, true);
+    console.log("Upsert response:", res);
     const upsertId = res?.id ?? res?.contact?.id ?? res?.contactId ?? res?.data?.id;
     if (upsertId) return { id: upsertId };
   } catch (e) {
@@ -428,6 +430,7 @@ export async function upsertContactAtLocation(
       method: "POST",
       body: JSON.stringify({ ...body, locationId }),
     }, true);
+    console.log("Create response:", res);
     const createId = res?.id ?? res?.contact?.id ?? res?.contactId ?? res?.data?.id;
     if (createId) return { id: createId };
   } catch (e) {
