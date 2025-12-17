@@ -62,6 +62,7 @@ export async function POST(req: Request) {
         tags,
         timeOfPurchase,
         cityOfPurchase,
+        toogle: false
       });
 
       return new Response(JSON.stringify({ id: res.id }), { status: 200, headers });
