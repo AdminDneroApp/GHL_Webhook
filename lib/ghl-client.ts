@@ -399,7 +399,7 @@ export async function createContactNote(
 /** ===================== DNERO WEB ===================== **/
 export async function upsertContactAtLocation(
   locationId: string,
-  input: { firstName?: string; lastName?: string; phone?: string; email?: string , tags?: string[], timeOfPurchase?: string, cityOfPurchase?: string }
+  input: { firstName?: string; lastName?: string; phone?: string; email?: string , tags?: string[], timeOfPurchase?: string, cityOfPurchase?: string, toogle?: boolean }
 ): Promise<{ id: string }> {
   const body = mapContactBody({
     email: input.email,
@@ -419,7 +419,7 @@ export async function upsertContactAtLocation(
     const res = await apiFetch<any>(`/contacts/upsert`, {
       method: "POST",
       body: JSON.stringify({ ...body, locationId }),
-    }, true);
+    }, input.toogle ?? true);
     console.log("Upsert response:", res);
     const upsertId = res?.id ?? res?.contact?.id ?? res?.contactId ?? res?.data?.id;
     if (upsertId) return { id: upsertId };
