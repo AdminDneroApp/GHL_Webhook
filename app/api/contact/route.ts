@@ -24,20 +24,13 @@ export async function OPTIONS(req: Request) {
 }
 
 export async function POST(req: Request) {
+  console.log("CONTACT_REQUEST_RECEIVED");
   try {
     const origin = pickAllowedOrigin(req);
     const headers = corsHeaders(origin);
-    // Optional protection header
-    if (ENV.TOKEN) {
-      const token = req.headers.get("x-dneroweb-token");
-      if (token !== ENV.TOKEN) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
-      }
-    }
-
     const raw = await req.text();
     if (!raw?.trim()) return new Response(JSON.stringify({ error: "Empty body" }), { status: 400, headers });
-
+    console.log("CONTACT_RAW_PAYLOAD", raw);
     let data: unknown;
     try { data = JSON.parse(raw); }
     catch { return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers }); }
@@ -60,18 +53,23 @@ export async function POST(req: Request) {
     }
 
     console.log("Upserting Contact contact:", { firstName, lastName, phone, email, tags });
+    try {
+      const res = await upsertContactAtLocation(ENV.LOCATION_ID, {
+        firstName,
+        lastName,
+        phone: phone || undefined,
+        email,
+        tags,
+        timeOfPurchase,
+        cityOfPurchase,
+      });
 
-    const res = await upsertContactAtLocation(ENV.LOCATION_ID, {
-      firstName,
-      lastName,
-      phone: phone || undefined,
-      email,
-      tags,
-      timeOfPurchase,
-      cityOfPurchase,
-    });
-
-    return new Response(JSON.stringify({ id: res.id }), { status: 200, headers });
+      return new Response(JSON.stringify({ id: res.id }), { status: 200, headers });
+    } catch (error) {
+      
+      console.error("CONTACT_UPSERT_ERROR", error);
+      return new Response(JSON.stringify({ error: "Failed to upsert contact" }), { status: 500, headers });
+    }
   } catch (err: any) {
     const headers = corsHeaders(pickAllowedOrigin(req));
     console.error("CONTACT_ERROR", err?.message || err);
