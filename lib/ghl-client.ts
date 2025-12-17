@@ -399,7 +399,7 @@ export async function createContactNote(
 /** ===================== DNERO WEB ===================== **/
 export async function upsertContactAtLocation(
   locationId: string,
-  input: { firstName?: string; lastName?: string; phone?: string; email?: string , tags?: string[] }
+  input: { firstName?: string; lastName?: string; phone?: string; email?: string , tags?: string[], timeOfPurchase?: string, cityOfPurchase?: string }
 ): Promise<{ id: string }> {
   const body = mapContactBody({
     email: input.email,
@@ -407,6 +407,10 @@ export async function upsertContactAtLocation(
     firstName: input.firstName,
     lastName: input.lastName,
     tags: input.tags || [],
+    customFields: [
+      { id: "contact.en_cuanto_tiempo_te_gustaria_comprar", value: input.timeOfPurchase },
+      { id: "contact.city_of_purchase", value: input.cityOfPurchase },
+    ]
   });
   console.log("Upserting contact at location:", locationId, body);
 

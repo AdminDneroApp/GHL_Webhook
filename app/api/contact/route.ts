@@ -14,6 +14,8 @@ const Schema = z.object({
   phone:     z.string().trim().optional(),
   email:     z.string().email().trim().optional(),
   tags:      z.array(z.string().trim()).optional(),
+  timeOfPurchase: z.string().trim().optional(),
+  cityOfPurchase: z.string().trim().optional(),
 });
 
 export async function OPTIONS(req: Request) {
@@ -46,7 +48,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid payload", issues: parsed.error.flatten() }, { status: 400 });
     }
 
-    const { firstName, lastName, tags } = parsed.data;
+    const { firstName, lastName, tags, timeOfPurchase, cityOfPurchase } = parsed.data;
     const phone = normalizePhone(parsed.data.phone, ENV.DEFAULT_COUNTRY as any);
     const email = parsed.data.email;
 
@@ -65,6 +67,8 @@ export async function POST(req: Request) {
       phone: phone || undefined,
       email,
       tags,
+      timeOfPurchase,
+      cityOfPurchase,
     });
 
     return new Response(JSON.stringify({ id: res.id }), { status: 200, headers });
