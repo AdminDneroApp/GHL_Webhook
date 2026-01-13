@@ -86,6 +86,7 @@ export interface UpsertContactInput {
   website?: string;
   dateOfBirth?: string;
   customFields?: { id: string; value: any }[];
+  type?: any; 
 }
 
 export async function upsertContact(input: UpsertContactInput, existingId?: string): Promise<{ id: string }> {
@@ -406,7 +407,7 @@ export async function upsertContactAtLocation(
     phone: input.phone,
     firstName: input.firstName,
     lastName: input.lastName,
-    tags: input.tags || [],
+    type: null,
     customFields: [
       { id: "SsLyPWgZdWgbpfGS7J53", value: input.timeOfPurchase },
       { id: "h36xYxny9AEGkMIU3uky", value: input.cityOfPurchase },
