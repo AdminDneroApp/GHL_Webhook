@@ -410,7 +410,7 @@ export async function upsertContactAtLocation(
     customFields: [
       { id: "SsLyPWgZdWgbpfGS7J53", value: input.timeOfPurchase },
       { id: "h36xYxny9AEGkMIU3uky", value: input.cityOfPurchase },
-      { id: "jZL7GeNhHWWFi65VVyNr", value: "" },
+      { id: "jZL7GeNhHWWFi65VVyNr", value: null },
     ]
   });
   console.log("Upserting contact at location:", locationId, body);
