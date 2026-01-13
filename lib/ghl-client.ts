@@ -407,7 +407,7 @@ export async function upsertContactAtLocation(
     phone: input.phone,
     firstName: input.firstName,
     lastName: input.lastName,
-    type: null,
+    type: "Select",
     customFields: [
       { id: "SsLyPWgZdWgbpfGS7J53", value: input.timeOfPurchase },
       { id: "h36xYxny9AEGkMIU3uky", value: input.cityOfPurchase },
