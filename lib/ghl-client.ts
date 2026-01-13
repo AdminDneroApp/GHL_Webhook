@@ -408,8 +408,9 @@ export async function upsertContactAtLocation(
     lastName: input.lastName,
     tags: input.tags || [],
     customFields: [
-      { id: "contact.en_cuanto_tiempo_te_gustaria_comprar", value: input.timeOfPurchase },
-      { id: "contact.city_of_purchase", value: input.cityOfPurchase },
+      { id: "SsLyPWgZdWgbpfGS7J53", value: input.timeOfPurchase },
+      { id: "h36xYxny9AEGkMIU3uky", value: input.cityOfPurchase },
+      { id: "jZL7GeNhHWWFi65VVyNr", value: "" },
     ]
   });
   console.log("Upserting contact at location:", locationId, body);
