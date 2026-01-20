@@ -400,7 +400,17 @@ export async function createContactNote(
 /** ===================== DNERO WEB ===================== **/
 export async function upsertContactAtLocation(
   locationId: string,
-  input: { firstName?: string; lastName?: string; phone?: string; email?: string , tags?: string[], timeOfPurchase?: string, cityOfPurchase?: string, toogle?: boolean }
+  input: { 
+    firstName?: string; 
+    lastName?: string; 
+    phone?: string; 
+    email?: string ,
+    tags?: string[], 
+    timeOfPurchase?: string, 
+    cityOfPurchase?: string, 
+    objectiveRefinance?: string, 
+    californiaCity?: string,
+    toogle?: boolean }
 ): Promise<{ id: string }> {
   const body = mapContactBody({
     email: input.email,
@@ -413,6 +423,8 @@ export async function upsertContactAtLocation(
       { id: "SsLyPWgZdWgbpfGS7J53", value: input.timeOfPurchase },
       { id: "h36xYxny9AEGkMIU3uky", value: input.cityOfPurchase },
       { id: "jZL7GeNhHWWFi65VVyNr", value: null },
+      { id: "3XvOQfUTGuMZziYJUCLo", value: input.objectiveRefinance },
+      { id: "UUhPXJEAKzxgfT7jcCox", value: input.californiaCity },
     ]
   });
   console.log("Upserting contact at location:", locationId, body);
