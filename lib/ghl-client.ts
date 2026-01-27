@@ -410,6 +410,7 @@ export async function upsertContactAtLocation(
     cityOfPurchase?: string, 
     objectiveRefinance?: string, 
     californiaCity?: string,
+    wordPress_source?: string,
     toogle?: boolean }
 ): Promise<{ id: string }> {
   const body = mapContactBody({
@@ -425,6 +426,7 @@ export async function upsertContactAtLocation(
       { id: "jZL7GeNhHWWFi65VVyNr", value: null },
       { id: "3XvOQfUTGuMZziYJUCLo", value: input.objectiveRefinance },
       { id: "UUhPXJEAKzxgfT7jcCox", value: input.californiaCity },
+      { id: "9nudhGcA50M4Nbbd7H8l", value: input.wordPress_source }
     ]
   });
   console.log("Upserting contact at location:", locationId, body);
