@@ -411,6 +411,11 @@ export async function upsertContactAtLocation(
     objectiveRefinance?: string, 
     californiaCity?: string,
     wordPress_source?: string,
+    utmSource?: string,
+    utmCampaign?: string,
+    utmMedium?: string,
+    utmContent?: string,
+    utmTerm?: string,
     toogle?: boolean }
 ): Promise<{ id: string }> {
   const body = mapContactBody({
@@ -426,7 +431,12 @@ export async function upsertContactAtLocation(
       { id: "jZL7GeNhHWWFi65VVyNr", value: null },
       { id: "3XvOQfUTGuMZziYJUCLo", value: input.objectiveRefinance },
       { id: "UUhPXJEAKzxgfT7jcCox", value: input.californiaCity },
-      { id: "9nudhGcA50M4Nbbd7H8l", value: input.wordPress_source }
+      { id: "9nudhGcA50M4Nbbd7H8l", value: input.wordPress_source },
+      { id: "RWsDDTvFzqNLmtZKcTIl", value: input.utmSource },
+      { id: "wa4m0sEPHXfbveoYJLln", value: input.utmCampaign },
+      { id: "uFBPELwDS7D0kPnD3jp0", value: input.utmMedium },
+      { id: "huAZgjUs1bPEEQnN4sHP", value: input.utmContent },
+      { id: "WNwa5CSwmGY1aCEWAzZC", value: input.utmTerm },
     ]
   });
   console.log("Upserting contact at location:", locationId, body);

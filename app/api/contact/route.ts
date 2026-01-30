@@ -19,6 +19,11 @@ const Schema = z.object({
   objectiveRefinance: z.string().trim().optional(),
   californiaCity: z.string().trim().optional(),
   wordPress_source: z.string().trim().optional(),
+  utmSource: z.string().trim().optional(),
+  utmCampaign: z.string().trim().optional(),
+  utmMedium: z.string().trim().optional(),
+  utmContent: z.string().trim().optional(),
+  utmTerm: z.string().trim().optional(),
 });
 
 export async function OPTIONS(req: Request) {
@@ -44,7 +49,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid payload", issues: parsed.error.flatten() }, { status: 400 });
     }
 
-    const { firstName, lastName, tags, timeOfPurchase, cityOfPurchase, objectiveRefinance, californiaCity, wordPress_source } = parsed.data;
+    const { firstName, lastName, tags, timeOfPurchase, cityOfPurchase, objectiveRefinance, californiaCity, wordPress_source, utmSource, utmCampaign, utmMedium, utmContent, utmTerm } = parsed.data;
     const phone = normalizePhone(parsed.data.phone, ENV.DEFAULT_COUNTRY as any);
     const email = parsed.data.email;
 
@@ -68,6 +73,11 @@ export async function POST(req: Request) {
         objectiveRefinance,
         californiaCity,
         wordPress_source,
+        utmSource,
+        utmCampaign,
+        utmMedium,
+        utmContent,
+        utmTerm,
         toogle: false
       });
 
