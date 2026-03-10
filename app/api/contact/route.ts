@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     console.log("Upserting Contact contact:", { firstName, lastName, phone, email, tags, customFields });
 
     try {
-      const res = await upsertContact({
+      await upsertContact({
         firstName,
         lastName,
         phone: phone || undefined,
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
         customFields: customFields.length ? customFields : undefined,
       });
 
-      return new Response(JSON.stringify({ id: res.id }), { status: 200, headers });
+      return new Response(JSON.stringify({ success: true }), { status: 200, headers });
     } catch (error) {
       console.error("CONTACT_UPSERT_ERROR", error);
       return new Response(JSON.stringify({ error: "Failed to upsert contact" }), { status: 500, headers });
