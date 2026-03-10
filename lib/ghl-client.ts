@@ -92,19 +92,30 @@ export interface UpsertContactInput {
 }
 
 export async function upsertContact(input: UpsertContactInput, existingId?: string): Promise<{ id: string }> {
+  // Pre-check: fetch existing contact to merge tags
+  if (input.tags?.length) {
+    const query = input.phone?.trim() || input.email?.trim();
+    if (query) {
+      const existing = await searchContactByPhone(query).catch(() => null);
+      if (existing?.tags?.length) {
+        const merged = Array.from(new Set([...existing.tags, ...input.tags]));
+        input = { ...input, tags: merged };
+      }
+    }
+  }
+
   const contactBody = mapContactBody(input);
-  
+
   if (existingId) {
     const res = await apiFetch<{ id: string }>(`/contacts/${existingId}`, {
       method: "PUT",
       body: JSON.stringify(contactBody)
     });
-    // Ensure we return a valid ID
     const contactId = res.id || existingId;
     if (!contactId) throw new Error("Contact ID missing after PUT update.");
     return { id: contactId };
   }
-  
+
   const res = await apiFetch<any>(`/contacts/upsert`, {
     method: "POST",
     body: JSON.stringify({ ...contactBody, locationId: ENV.LOCATION_ID })
