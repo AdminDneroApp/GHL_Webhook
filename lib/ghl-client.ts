@@ -23,10 +23,12 @@ async function apiFetch<T>(path: string, init?: RequestInit, useDneroWebHeaders 
     headers: { ...(useDneroWebHeaders ? dneroWebHeaders : baseHeaders), ...(init?.headers as HeadersInit) }
   });
   if (!res.ok) {
+    console.error(`API request failed: ${res.status} ${res.statusText} @ ${path}`);
     const text = await res.text().catch(() => "No response body");
     // Enhanced error message to include the response body which holds the 422 details
     throw new Error(`HTTP ${res.status} ${res.statusText} @ ${path} :: Response Body: ${text}`);
   }
+  console.log(`API request successful: ${res.status} ${res.statusText} @ ${path}`);
   if (res.status === 204) return {} as T;
   return (await res.json()) as T;
 }
@@ -107,6 +109,7 @@ export async function upsertContact(input: UpsertContactInput, existingId?: stri
     method: "POST",
     body: JSON.stringify({ ...contactBody, locationId: ENV.LOCATION_ID })
   });
+  console.log("UPSERT_CONTACT_RESPONSE", JSON.stringify(res));
   const contactId = res?.id ?? res?.contact?.id ?? res?.contactId;
   if (!contactId) throw new Error("Contact ID missing after POST upsert.");
   return { id: contactId };
