@@ -103,24 +103,13 @@ export async function upsertContact(input: UpsertContactInput, existingId?: stri
     return { id: contactId };
   }
   
-  try {
-    const res = await apiFetch<{ id: string }>(`/contacts/upsert`, {
-      method: "POST",
-      body: JSON.stringify({ ...contactBody, locationId: ENV.LOCATION_ID })
-    });
-    const contactId = res.id;
-    if (!contactId) throw new Error("Contact ID missing after POST upsert.");
-    return { id: contactId };
-  } catch (e) {
-    // Optional: Log the error (e) here for debugging the upsert failure
-    const res = await apiFetch<{ id: string }>(`/contacts`, {
-      method: "POST",
-      body: JSON.stringify({ ...contactBody, locationId: ENV.LOCATION_ID })
-    });
-    const contactId = res.id;
-    if (!contactId) throw new Error("Contact ID missing after POST create.");
-    return { id: contactId };
-  }
+  const res = await apiFetch<any>(`/contacts/upsert`, {
+    method: "POST",
+    body: JSON.stringify({ ...contactBody, locationId: ENV.LOCATION_ID })
+  });
+  const contactId = res?.id ?? res?.contact?.id ?? res?.contactId;
+  if (!contactId) throw new Error("Contact ID missing after POST upsert.");
+  return { id: contactId };
 }
 
 function mapContactBody(c: UpsertContactInput) {
