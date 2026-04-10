@@ -23,7 +23,8 @@ export async function OPTIONS(req: Request) {
 }
 
 export async function POST(req: Request) {
-  console.log("CONTACT_REQUEST_RECEIVED");
+  const entryUrl = req.headers.get("x-entry-url");
+  console.log("CONTACT_REQUEST_RECEIVED", entryUrl ? { entryUrl } : {});
   try {
     const origin = pickAllowedOrigin(req);
     const headers = corsHeaders(origin);
