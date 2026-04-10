@@ -19,7 +19,7 @@ export function corsHeaders(origin: string | null) {
     h.set("Vary", "Origin"); // caching safety
   }
   h.set("Access-Control-Allow-Methods", "POST,OPTIONS");
-  h.set("Access-Control-Allow-Headers", "Content-Type, x-dneroweb-token");
+  h.set("Access-Control-Allow-Headers", "Content-Type, x-dneroweb-token, x-entry-url");
   h.set("Access-Control-Max-Age", "86400");
   return h;
 }
