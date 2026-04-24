@@ -40,4 +40,8 @@ export const ENV = {
   DEFAULT_COUNTRY: process.env.DEFAULT_COUNTRY?.trim() || "US",
   DNEROWEB_TOKEN: process.env.DNEROWEB_TOKEN || "",
   CORS_ORIGINS: process.env.CORS_ORIGINS || "",
+
+  // C3 sub-account
+  GHL_C3_LOCATION_ID: process.env.GHL_C3_LOCATION_ID || "",
+  GHL_C3_INTEGRATION_KEY: process.env.GHL_C3_INTEGRATION_KEY || "",
 };

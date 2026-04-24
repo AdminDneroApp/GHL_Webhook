@@ -15,12 +15,24 @@ const dneroWebHeaders: HeadersInit = {
   "Version": ENV.API_VERSION,
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit, useDneroWebHeaders = false): Promise<T> {
+const c3Headers: HeadersInit = {
+  "Authorization": `Bearer ${ENV.GHL_C3_INTEGRATION_KEY}`,
+  "Content-Type": "application/json",
+  "Version": ENV.API_VERSION,
+}
+
+type HeadersMode = "default" | "dneroWeb" | "c3";
+
+async function apiFetch<T>(path: string, init?: RequestInit, useDneroWebHeaders: boolean | HeadersMode = false): Promise<T> {
   const url = `${ENV.BASE_URL}${path}`;
-  console.log('using headers:', useDneroWebHeaders ? dneroWebHeaders : baseHeaders);
+  let selectedHeaders: HeadersInit;
+  if (useDneroWebHeaders === "c3") selectedHeaders = c3Headers;
+  else if (useDneroWebHeaders === true || useDneroWebHeaders === "dneroWeb") selectedHeaders = dneroWebHeaders;
+  else selectedHeaders = baseHeaders;
+  console.log('using headers mode:', useDneroWebHeaders);
   const res = await fetch(url, {
     ...init,
-    headers: { ...(useDneroWebHeaders ? dneroWebHeaders : baseHeaders), ...(init?.headers as HeadersInit) }
+    headers: { ...selectedHeaders, ...(init?.headers as HeadersInit) }
   });
   if (!res.ok) {
     console.error(`API request failed: ${res.status} ${res.statusText} @ ${path}`);
@@ -482,4 +494,27 @@ export async function upsertContactAtLocation(
   }
 
   throw new Error("Contact ID missing after upsert/create at custom location.");
+}
+
+/** ===================== C3 SUB-ACCOUNT ===================== **/
+
+export async function upsertContactC3(input: {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  email?: string;
+  tags?: string[];
+}): Promise<{ id: string }> {
+  const locationId = ENV.GHL_C3_LOCATION_ID;
+  const body = mapContactBody(input);
+
+  const res = await apiFetch<any>(`/contacts/upsert`, {
+    method: "POST",
+    body: JSON.stringify({ ...body, locationId }),
+  }, "c3");
+
+  console.log("C3_UPSERT_RESPONSE", JSON.stringify(res));
+  const id = res?.id ?? res?.contact?.id ?? res?.contactId;
+  if (!id) throw new Error("Contact ID missing after C3 upsert.");
+  return { id };
 }
