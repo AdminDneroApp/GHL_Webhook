@@ -24,30 +24,41 @@ export async function OPTIONS(req: Request) {
 export async function POST(req: Request) {
   try {
     const origin = pickAllowedOrigin(req);
+    console.log("C3_REQUEST_ORIGIN", { origin, allowed: !!origin });
     const headers = corsHeaders(origin);
 
     const raw = await req.text();
-    if (!raw?.trim()) return new Response(JSON.stringify({ error: "Empty body" }), { status: 400, headers });
+    if (!raw?.trim()) {
+      console.error("C3_EMPTY_BODY");
+      return new Response(JSON.stringify({ error: "Empty body" }), { status: 400, headers });
+    }
 
     let data: unknown;
     try { data = JSON.parse(raw); }
-    catch { return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers }); }
+    catch (e: any) {
+      console.error("C3_INVALID_JSON", e?.message);
+      return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers });
+    }
 
-    const parsed = Schema.safeParse(data);
     console.log("C3_CONTACT_PAYLOAD", JSON.stringify(data));
+    const parsed = Schema.safeParse(data);
     if (!parsed.success) {
+      console.error("C3_VALIDATION_FAILED", JSON.stringify(parsed.error.flatten()));
       return NextResponse.json({ error: "Invalid payload", issues: parsed.error.flatten() }, { status: 400 });
     }
 
     const { firstName, lastName, tags } = parsed.data;
     const phone = normalizePhone(parsed.data.phone, ENV.DEFAULT_COUNTRY as any);
     const email = parsed.data.email;
+    console.log("C3_PARSED", { firstName, lastName, phone, email, tags });
 
     if (!phone && !email) {
+      console.error("C3_MISSING_IDENTITY", { phone, email });
       return NextResponse.json({ error: "Missing contact identity (phone or email required)" }, { status: 400 });
     }
-    if (!ENV.GHL_C3_LOCATION_ID) {
-      return NextResponse.json({ error: "Server missing GHL_C3_LOCATION_ID" }, { status: 500 });
+    if (!ENV.GHL_C3_LOCATION_ID || !ENV.GHL_C3_INTEGRATION_KEY) {
+      console.error("C3_MISSING_ENV", { GHL_C3_LOCATION_ID: !!ENV.GHL_C3_LOCATION_ID, GHL_C3_INTEGRATION_KEY: !!ENV.GHL_C3_INTEGRATION_KEY });
+      return new Response(JSON.stringify({ error: "Server misconfigured" }), { status: 500, headers });
     }
 
     console.log("C3_UPSERTING_CONTACT", { firstName, lastName, phone, email, tags });
@@ -60,6 +71,7 @@ export async function POST(req: Request) {
       tags,
     });
 
+    console.log("C3_UPSERT_SUCCESS", { id: res.id });
     return new Response(JSON.stringify({ id: res.id }), { status: 200, headers });
   } catch (err: any) {
     const headers = corsHeaders(pickAllowedOrigin(req));
