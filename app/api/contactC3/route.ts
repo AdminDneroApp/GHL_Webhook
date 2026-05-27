@@ -8,6 +8,7 @@ import { corsHeaders, pickAllowedOrigin } from "@lib/cors";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// strict schema — C3 doesn't resolve custom fields, no need for loose
 const Schema = z.object({
   firstName: z.string().trim().optional(),
   lastName:  z.string().trim().optional(),
@@ -27,6 +28,7 @@ export async function POST(req: Request) {
     console.log("C3_REQUEST_ORIGIN", { origin, allowed: !!origin });
     const headers = corsHeaders(origin);
 
+    // parse + validate
     const raw = await req.text();
     if (!raw?.trim()) {
       console.error("C3_EMPTY_BODY");
@@ -61,6 +63,7 @@ export async function POST(req: Request) {
       return new Response(JSON.stringify({ error: "Server misconfigured" }), { status: 500, headers });
     }
 
+    // upsert to C3 sub-account using its own integration key
     console.log("C3_UPSERTING_CONTACT", { firstName, lastName, phone, email, tags });
 
     const res = await upsertContactC3({

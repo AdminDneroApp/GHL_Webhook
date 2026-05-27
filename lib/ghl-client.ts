@@ -4,8 +4,7 @@ type HeadersInit = Record<string, string>;
 
 const baseHeaders: HeadersInit = {
   "Authorization": `Bearer ${ENV.TOKEN}`,
-  // Ensure the correct API Version is set in ENV
-  "Version": ENV.API_VERSION, 
+  "Version": ENV.API_VERSION,
   "Content-Type": "application/json"
 };
 
@@ -23,6 +22,7 @@ const c3Headers: HeadersInit = {
 
 type HeadersMode = "default" | "dneroWeb" | "c3";
 
+// shared fetch wrapper — routes to the right auth headers based on account mode (default / dneroWeb / c3)
 async function apiFetch<T>(path: string, init?: RequestInit, useDneroWebHeaders: boolean | HeadersMode = false): Promise<T> {
   const url = `${ENV.BASE_URL}${path}`;
   let selectedHeaders: HeadersInit;
@@ -37,7 +37,6 @@ async function apiFetch<T>(path: string, init?: RequestInit, useDneroWebHeaders:
   if (!res.ok) {
     console.error(`API request failed: ${res.status} ${res.statusText} @ ${path}`);
     const text = await res.text().catch(() => "No response body");
-    // Enhanced error message to include the response body which holds the 422 details
     throw new Error(`HTTP ${res.status} ${res.statusText} @ ${path} :: Response Body: ${text}`);
   }
   console.log(`API request successful: ${res.status} ${res.statusText} @ ${path}`);
@@ -45,7 +44,7 @@ async function apiFetch<T>(path: string, init?: RequestInit, useDneroWebHeaders:
   return (await res.json()) as T;
 }
 
-/** ===================== CONTACTOS ===================== **/
+// contacts
 
 export interface ContactRecord {
   id: string;
@@ -56,7 +55,6 @@ export interface ContactRecord {
   tags?: string[];
 }
 
-// Search Contact function (no changes needed)
 export async function searchContactByPhone(phone: string): Promise<ContactRecord | null> {
   console.log("Searching contact by phone:", phone);
   const q = String(phone).trim();
@@ -103,8 +101,8 @@ export interface UpsertContactInput {
   type?: any; 
 }
 
+// merges existing tags with incoming tags before write so we never overwrite history
 export async function upsertContact(input: UpsertContactInput, existingId?: string): Promise<{ id: string }> {
-  // Pre-check: fetch existing contact to merge tags
   if (input.tags?.length) {
     const query = input.phone?.trim() || input.email?.trim();
     if (query) {
@@ -138,6 +136,7 @@ export async function upsertContact(input: UpsertContactInput, existingId?: stri
   return { id: contactId };
 }
 
+// strips undefined fields — GHL rejects null/empty on some endpoints
 function mapContactBody(c: UpsertContactInput) {
   const body: any = {};
   if (c.email) body.email = c.email;
@@ -158,8 +157,7 @@ function mapContactBody(c: UpsertContactInput) {
 }
 
 
-/** ===================== PIPELINES & STAGES ===================== **/
-// (No changes needed in this section)
+// pipelines — resolves by ID first, name match as fallback
 
 export interface Pipeline {
   id: string;
@@ -196,7 +194,7 @@ export function findStageIdByName(p: Pipeline, name?: string): string | undefine
   return s?.id;
 }
 
-/** ===================== OPORTUNIDADES ===================== **/
+// opportunities
 
 export interface UpsertOpportunityInput {
   contactId: string;
@@ -216,7 +214,6 @@ export interface UpsertOpportunityInput {
   >;
 }
 
-// List opportunities (no changes needed)
 export async function listOpportunitiesByContactInPipeline(
   contactId: string,
   pipelineId: string,
@@ -246,7 +243,6 @@ function normalizeCustomFields(list?: UpsertOpportunityInput['customFields']) {
   });
 }
 
-// --- helper: map body exactly to GHL schema (camelCase) ---
 function mapOpportunityBody(input: UpsertOpportunityInput, withLocation = false) {
   const body: any = {
     pipelineId:    input.pipelineId,
@@ -267,9 +263,9 @@ function mapOpportunityBody(input: UpsertOpportunityInput, withLocation = false)
   return body;
 }
 
-// UPDATE (PUT /opportunities/{id})
+// update
 export async function updateOpportunity(id: string, input: UpsertOpportunityInput): Promise<{ id: string }> {
-  const payload = mapOpportunityBody(input, false); // locationId not required on update
+  const payload = mapOpportunityBody(input, false);
   const res = await apiFetch<{ id: string }>(`/opportunities/${id}`, {
     method: "PUT",
     body: JSON.stringify(payload),
@@ -277,25 +273,23 @@ export async function updateOpportunity(id: string, input: UpsertOpportunityInpu
   return { id: res.id ?? id };
 }
 
-// CREATE (POST /opportunities/)  <-- trailing slash REQUIRED
+// create
 export async function createOpportunity(input: UpsertOpportunityInput): Promise<{ id: string }> {
   if (!input.contactId) throw new Error("Cannot create opportunity: Missing contactId");
-  const payload = mapOpportunityBody(input, true); // include locationId
-  const res = await apiFetch<{ id: string }>(`/opportunities/`, {   // <-- slash
+  const payload = mapOpportunityBody(input, true);
+  const res = await apiFetch<{ id: string }>(`/opportunities/`, { // trailing slash required
     method: "POST",
     body: JSON.stringify(payload),
   });
   return { id: res.id };
 }
 
-// UPSERT (POST /opportunities/upsert)
+// upsert — checks for an existing opp in the pipeline first; updates if found, creates otherwise
 export async function upsertOpportunity(input: UpsertOpportunityInput): Promise<{ id: string }> {
-  // first check if it already exists
   const existing = await listOpportunitiesByContactInPipeline(input.contactId, input.pipelineId);
   if (existing.length) return updateOpportunity(existing[0].id, input);
 
-  // try upsert
-  const upsertPayload = mapOpportunityBody(input, true); // include locationId
+  const upsertPayload = mapOpportunityBody(input, true);
   try {
     const res = await apiFetch<{ id: string }>(`/opportunities/upsert`, {
       method: "POST",
@@ -303,12 +297,11 @@ export async function upsertOpportunity(input: UpsertOpportunityInput): Promise<
     });
     return { id: res.id };
   } catch {
-    // fallback to create
     return createOpportunity(input);
   }
 }
 
-/** ===================== CONTACT NOTES ===================== **/
+// notes
 
 export async function searchContactAtLocation(
   locationId: string,
@@ -349,7 +342,6 @@ export interface ListNotesOptions {
   startAfterId?: string; 
 }
 
-/** GET /contacts/:contactId/notes */
 export async function listContactNotes(
   contactId: string,
   opts: ListNotesOptions = {}
@@ -374,7 +366,6 @@ export async function listContactNotes(
   }), true);
 }
 
-/** POST /contacts/:contactId/notes */
 export interface CreateContactNoteInput {
   body: string;
   title?: string;
@@ -383,8 +374,8 @@ export interface CreateContactNoteInput {
 }
 
 export interface CreateContactNoteInput {
-  body: string;         // required
-  userId?: string;      // optional (author)
+  body: string;
+  userId?: string;
 }
 
 export async function createContactNote(
@@ -412,7 +403,7 @@ export async function createContactNote(
   return { id };
 }
 
-/** ===================== DNERO WEB ===================== **/
+// dnero web — separate sub-account; 3-step write: upsert → create → search
 export async function upsertContactAtLocation(
   locationId: string,
   input: { 
@@ -456,7 +447,7 @@ export async function upsertContactAtLocation(
   });
   console.log("Upserting contact at location:", locationId, body);
 
-  // 1) Try UPSERT
+  // upsert
   try {
     const res = await apiFetch<any>(`/contacts/upsert`, {
       method: "POST",
@@ -466,11 +457,10 @@ export async function upsertContactAtLocation(
     const upsertId = res?.id ?? res?.contact?.id ?? res?.contactId ?? res?.data?.id;
     if (upsertId) return { id: upsertId };
   } catch (e) {
-    // fall through to CREATE
     console.warn("Upsert failed, falling back to create:", e);
   }
 
-  // 2) Fallback to CREATE
+  // fallback create
   try {
     const res = await apiFetch<any>(`/contacts`, {
       method: "POST",
@@ -480,11 +470,10 @@ export async function upsertContactAtLocation(
     const createId = res?.id ?? res?.contact?.id ?? res?.contactId ?? res?.data?.id;
     if (createId) return { id: createId };
   } catch (e) {
-    // continue to search fallback
     console.warn("Create failed, falling back to search:", e);
   }
 
-  // 3) Final fallback: SEARCH (prefer phone, then email)
+  // fallback search
   const q = input.phone?.trim() || input.email?.trim();
   if (q) {
     console.log("Searching contact at location with query:", q);
@@ -496,7 +485,7 @@ export async function upsertContactAtLocation(
   throw new Error("Contact ID missing after upsert/create at custom location.");
 }
 
-/** ===================== C3 SUB-ACCOUNT ===================== **/
+// c3
 
 export async function upsertContactC3(input: {
   firstName?: string;

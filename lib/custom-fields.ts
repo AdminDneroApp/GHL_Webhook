@@ -9,6 +9,7 @@ const baseHeaders: HeadersInit = {
 
 type CF = { id: string; name: string; model: string; dataType?: string };
 
+// field cache — populated once per cold start, keyed by raw and normalized field name
 const CF_CACHE: {
   contact?: Map<string, CF>;
   loaded?: boolean;
@@ -28,12 +29,14 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+// consistent lowercase-underscore form for map lookups regardless of how the key arrives
 function normalizeKey(s: string): string {
   return s
     ? s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")
     : "";
 }
 
+// fetches all contact-model custom fields for the location and populates the cache
 async function loadContactFields(): Promise<Map<string, CF>> {
   if (CF_CACHE.contact && CF_CACHE.loaded) return CF_CACHE.contact;
   const data = await apiFetch<{ customFields?: CF[] }>(
@@ -53,27 +56,29 @@ async function loadContactFields(): Promise<Map<string, CF>> {
   return map;
 }
 
+// known GHL contact fields — excluded from custom field resolution to avoid double-mapping
 const STANDARD_KEYS = new Set(
   [
-    // contacto estándar
+    // contact
     "first_name", "last_name", "full_name", "email", "phone", "tags",
     "address1", "city", "state", "country", "timezone", "date_created",
     "postal_code", "company_name", "website", "date_of_birth", "contact_source",
     "full_address", "contact_type", "gclid",
-    // ubicación 
+    // location
     "location",
-    // oportunidad 
+    // opportunity
     "opportunity_name", "status", "lead_value", "opportunity_source", "source",
     "pipleline_stage", "pipeline_id", "id", "pipeline_name",
-    // campaign/user/appointment/order/invoice/task/note/message/workflow
+    // meta
     "campaign", "user", "calendar", "order", "invoice", "task", "note",
     "message", "workflow",
-    // auxiliares 
+    // internal
     "contact_id", "owner", "headers", "triggerData", "contact", "attributionSource",
-    "customData", 
+    "customData",
   ].map((s) => s.toLowerCase())
 );
 
+// coerces values to GHL-compatible types; arrays stay as arrays for multi-select fields, joined otherwise
 function normalizeCustomValue(raw: unknown, dataType?: string): any {
   if (raw == null) return undefined;
   if (Array.isArray(raw)) {
@@ -102,12 +107,14 @@ function normalizeCustomValue(raw: unknown, dataType?: string): any {
   return s.length ? s : undefined;
 }
 
+// resolves payload keys → GHL custom field IDs
+// 3-pass order: root keys → customData block → CUSTOM_FIELD_MAP_JSON env override
 export async function mapCustomFieldsFromPayload(payload: Record<string, any>) {
 const map = await loadContactFields();
 const out: { id: string; value: any }[] = [];
-const seen = new Set<string>(); // avoid duplicates across root/customData
+const seen = new Set<string>();
 
-// 1) root-level custom keys
+// pass 1: root-level unknown keys
 for (const [k, v] of Object.entries(payload)) {
   const keyLc = k.toLowerCase();
   if (STANDARD_KEYS.has(keyLc)) continue;
@@ -119,7 +126,7 @@ for (const [k, v] of Object.entries(payload)) {
   seen.add(cf.id);
 }
 
-// 2) customData block
+// pass 2: customData block
 const customData = payload?.customData;
 if (customData && typeof customData === "object") {
   for (const [k, v] of Object.entries(customData)) {
@@ -132,6 +139,7 @@ if (customData && typeof customData === "object") {
   }
 }
 
+  // pass 3: manual name→id overrides from CUSTOM_FIELD_MAP_JSON env var
   const overrideJson = process.env.CUSTOM_FIELD_MAP_JSON;
   if (overrideJson) {
     try {

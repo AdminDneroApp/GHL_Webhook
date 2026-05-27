@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
 
+  // field pickers — accepts multiple naming conventions from different CRM sources
   function pickNoteBody(p: any): string | undefined {
     const cands = [p.note_body, p.noteBody, p.note, p.note_text, p.noteText, p.contact_note, p.contactNote];
     for (const v of cands) {
@@ -34,7 +35,9 @@ export async function POST(req: Request) {
     }
     return undefined;
   }
+  
   try {
+    // token auth
     if (ENV.WEBHOOK_TOKEN) {
       const token = req.headers.get("x-webhook-token");
       if (token !== ENV.WEBHOOK_TOKEN) {
@@ -50,12 +53,12 @@ export async function POST(req: Request) {
       try {
         return JSON.parse(raw);
       } catch (e: any) {
-        // log útil para depurar JSON malformado
         console.error("INVALID_JSON_SNIPPET", raw.slice(0, 400));
         throw new Error(`Invalid JSON: ${e?.message || "parse error"}`);
       }
     }
 
+    // parse + validate
     const body = await readJson(req);
     const parsed = WebhookPayloadSchema.safeParse(body);
     if (!parsed.success) {
@@ -63,30 +66,28 @@ export async function POST(req: Request) {
     }
     const payload = parsed.data;
 
-    // === CONTACTO: prioridad por PHONE (requisito)
+    // contact — phone-first lookup, email as fallback identity
     const phone = normalizePhone(payload.phone, ENV.DEFAULT_COUNTRY as any);
     const email = (payload.email || "").trim() || undefined;
     if (!phone && !email) {
       return NextResponse.json({ error: "Missing contact identity (phone or email required)" }, { status: 400 });
     }
 
-    // Buscar por teléfono primero
     const found = phone ? await searchContactByPhone(phone) : null;
 
-    // Tags
+    // tags: normalize to array regardless of how sender formats them
     const tags = Array.isArray(payload.tags)
       ? payload.tags
       : typeof payload.tags === "string"
         ? payload.tags.split(",").map(s => s.trim()).filter(Boolean)
         : [];
 
-    // Custom fields (root + customData) -> [{id,value}]
     const customFields = await mapCustomFieldsFromPayload(payload);
 
-    // Upsert CONTACT
     const firstName = payload.first_name || payload.full_name?.split(" ")?.[0] || undefined;
     const lastName  = payload.last_name  || payload.full_name?.split(" ")?.slice(1).join(" ") || undefined;
 
+    // upsert contact — creates or updates, existing tags are merged in ghl-client
     const contactRes = await upsertContact(
       {
         email,
@@ -102,12 +103,12 @@ export async function POST(req: Request) {
         postalCode: payload.postal_code,
         website: payload.website,
         dateOfBirth: payload.date_of_birth,
-        customFields, // <-- NUEVO
+        customFields,
       },
       found?.id
     );
 
-    // === OPORTUNIDAD 
+    // opportunity — skipped entirely if no opp-related fields are in the payload
     const hasOpportunity =
       !!payload.opportunity_name ||
       !!payload.status ||
@@ -143,17 +144,18 @@ export async function POST(req: Request) {
       const opp = await upsertOpportunity({
         contactId:        contactRes.id,
         pipelineId:       pipeline.id,
-        pipelineStageId:  stageId, // API expects pipelineStageId
+        pipelineStageId:  stageId,
         status:           payload.status || undefined,
         title:            (payload.opportunity_name || `${(firstName ?? '').trim()} ${(lastName ?? '').trim()}`.trim() || 'Opportunity'),
         monetaryValue:    Number.isFinite(leadValue as number) ? (leadValue as number) : undefined,
         source:           payload.opportunity_source || payload.source || undefined,
-        customFields:     cf, // must be an array
+        customFields:     cf,
       });
 
       opportunityId = opp.id;
     }
 
+    // optional note — attached to the contact if note body is present
     let noteId: string | null = null;
     const noteBody = pickNoteBody(payload);
     if (noteBody) {

@@ -9,6 +9,7 @@ import { mapCustomFieldsFromPayload } from "@lib/custom-fields";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// loose so unknown keys pass through to the custom-fields resolver
 const Schema = z.object({
   firstName: z.string().trim().optional(),
   lastName:  z.string().trim().optional(),
@@ -23,11 +24,14 @@ export async function OPTIONS(req: Request) {
 }
 
 export async function POST(req: Request) {
+  // x-entry-url logged for source tracking
   const entryUrl = req.headers.get("x-entry-url");
   console.log("CONTACT_REQUEST_RECEIVED", entryUrl ? { entryUrl } : {});
   try {
     const origin = pickAllowedOrigin(req);
     const headers = corsHeaders(origin);
+
+    // parse + validate
     const raw = await req.text();
     if (!raw?.trim()) return new Response(JSON.stringify({ error: "Empty body" }), { status: 400, headers });
     console.log("CONTACT_RAW_PAYLOAD", raw);
@@ -52,9 +56,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Server missing LOCATION_ID" }, { status: 500 });
     }
 
+    // resolve any extra fields as GHL custom fields
     const customFields = await mapCustomFieldsFromPayload(parsed.data as Record<string, any>);
     console.log("Upserting Contact contact:", { firstName, lastName, phone, email, tags, customFields });
 
+    // upsert to main account
     try {
       await upsertContact({
         firstName,

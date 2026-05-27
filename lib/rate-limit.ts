@@ -18,11 +18,6 @@ setInterval(() => {
   }
 }, 60_000);
 
-/**
- * @param key       Unique identifier, e.g. `"<ip>:<pathname>"`
- * @param max       Maximum requests allowed per window
- * @param windowMs  Window duration in milliseconds
- */
 export function checkRateLimit(
   key: string,
   max: number,
