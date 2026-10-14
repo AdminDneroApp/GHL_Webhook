@@ -4,6 +4,7 @@ import { ENV } from "@lib/env";
 import { normalizePhone } from "@lib/phone";
 import { upsertContactAtLocation } from "@lib/ghl-client";
 import { corsHeaders, pickAllowedOrigin } from "@lib/cors";
+import { logCaller, logPayloadShape } from "@lib/observe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
   try {
     const origin = pickAllowedOrigin(req);
     const headers = corsHeaders(origin);
+    logCaller("dneroWeb", req, { originAllowed: !!origin });
     // Optional protection header
     if (ENV.DNEROWEB_TOKEN) {
       const token = req.headers.get("x-dneroweb-token");
@@ -40,6 +42,7 @@ export async function POST(req: Request) {
     try { data = JSON.parse(raw); }
     catch { return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers }); }
 
+    logPayloadShape("dneroWeb", data);
     const parsed = Schema.safeParse(data);
     console.log("DNEROWEB_PAYLOAD", JSON.stringify(data));
     if (!parsed.success) {

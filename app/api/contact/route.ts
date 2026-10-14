@@ -4,6 +4,7 @@ import { ENV } from "@lib/env";
 import { normalizePhone } from "@lib/phone";
 import { upsertContact } from "@lib/ghl-client";
 import { corsHeaders, pickAllowedOrigin } from "@lib/cors";
+import { logCaller, logPayloadShape } from "@lib/observe";
 import { mapCustomFieldsFromPayload } from "@lib/custom-fields";
 
 export const runtime = "nodejs";
@@ -30,6 +31,7 @@ export async function POST(req: Request) {
   try {
     const origin = pickAllowedOrigin(req);
     const headers = corsHeaders(origin);
+    logCaller("contact", req, { originAllowed: !!origin });
 
     // parse + validate
     const raw = await req.text();
@@ -39,6 +41,7 @@ export async function POST(req: Request) {
     try { data = JSON.parse(raw); }
     catch { return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers }); }
 
+    logPayloadShape("contact", data);
     const parsed = Schema.safeParse(data);
     console.log("CONTACT_PAYLOAD", JSON.stringify(data));
     if (!parsed.success) {

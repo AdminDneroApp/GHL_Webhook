@@ -11,6 +11,7 @@ import {
   createContactNote 
 } from "@lib/ghl-client";
 import { mapCustomFieldsFromPayload } from "@lib/custom-fields";
+import { logCaller, logPayloadShape } from "@lib/observe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +38,9 @@ export async function POST(req: Request) {
   }
   
   try {
+    // logged before auth so rejected callers are visible too
+    logCaller("webhook", req);
+
     // token auth
     if (ENV.WEBHOOK_TOKEN) {
       const token = req.headers.get("x-webhook-token");
@@ -60,6 +64,7 @@ export async function POST(req: Request) {
 
     // parse + validate
     const body = await readJson(req);
+    logPayloadShape("webhook", body);
     const parsed = WebhookPayloadSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid payload", issues: parsed.error.flatten() }, { status: 400 });

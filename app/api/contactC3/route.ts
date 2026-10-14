@@ -4,6 +4,7 @@ import { ENV } from "@lib/env";
 import { normalizePhone } from "@lib/phone";
 import { upsertContactC3 } from "@lib/ghl-client";
 import { corsHeaders, pickAllowedOrigin } from "@lib/cors";
+import { logCaller, logPayloadShape } from "@lib/observe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ export async function POST(req: Request) {
     const origin = pickAllowedOrigin(req);
     console.log("C3_REQUEST_ORIGIN", { origin, allowed: !!origin });
     const headers = corsHeaders(origin);
+    logCaller("contactC3", req, { originAllowed: !!origin });
 
     // parse + validate
     const raw = await req.text();
@@ -42,6 +44,7 @@ export async function POST(req: Request) {
       return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers });
     }
 
+    logPayloadShape("contactC3", data);
     console.log("C3_CONTACT_PAYLOAD", JSON.stringify(data));
     const parsed = Schema.safeParse(data);
     if (!parsed.success) {
