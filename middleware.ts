@@ -8,6 +8,7 @@ const RATE_LIMITS: Record<string, { max: number; windowMs: number }> = {
   "/api/health":   { max: 120, windowMs: 60_000 }, 
   // partner traffic arrives from few IPs, so the per-IP ceiling is higher
   "/api/emc/handoff": { max: 300, windowMs: 60_000 },
+  "/api/emc/ghl":     { max: 300, windowMs: 60_000 },
 };
 
 function getClientIp(req: NextRequest): string {
@@ -56,5 +57,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/webhook", "/api/contact", "/api/dneroWeb", "/api/health", "/api/emc/handoff"],
+  matcher: ["/api/webhook", "/api/contact", "/api/dneroWeb", "/api/health", "/api/emc/handoff", "/api/emc/ghl"],
 };

@@ -42,6 +42,27 @@ export function verifyEmcApiKey(req: Request, ip: string): EmcAuthResult {
   return { ok: true, keyIndex };
 }
 
+// ghl → emc flow: GHL workflow webhooks can't sign requests, so a shared secret header is the
+// strongest check GHL supports. same header name as /api/webhook, but its own secret. fails closed.
+export function verifyGhlWebhookToken(req: Request): { ok: true } | { ok: false; status: 401 | 503; reason: string } {
+  const tokens = list(ENV.EMC_GHL_WEBHOOK_TOKENS);
+  if (!tokens.length) return { ok: false, status: 503, reason: "not_configured" };
+
+  const presented = req.headers.get("x-webhook-token")?.trim();
+  if (!presented) return { ok: false, status: 401, reason: "missing_token" };
+
+  let matched = false;
+  for (const t of tokens) {
+    if (safeEqual(t, presented)) matched = true;
+  }
+  return matched ? { ok: true } : { ok: false, status: 401, reason: "invalid_token" };
+}
+
+// only our own sub-accounts may trigger the flow — defaults to the main location
+export function isAllowedGhlLocation(locationId: string): boolean {
+  return list(ENV.EMC_GHL_LOCATION_IDS || ENV.LOCATION_ID).includes(locationId);
+}
+
 export type EmcSignatureResult =
   | { ok: true }
   | { ok: false; status: 401 | 503; reason: string };
