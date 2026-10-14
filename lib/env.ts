@@ -38,4 +38,13 @@ export const ENV = {
   // c3
   GHL_C3_LOCATION_ID: process.env.GHL_C3_LOCATION_ID || "",
   GHL_C3_INTEGRATION_KEY: process.env.GHL_C3_INTEGRATION_KEY || "",
+
+  // emc — comma-separated lists; several keys / secrets allow rotation without downtime
+  EMC_API_KEYS: process.env.EMC_API_KEYS || "",
+  EMC_SIGNING_SECRET: process.env.EMC_SIGNING_SECRET || "",
+  EMC_ALLOWED_IPS: process.env.EMC_ALLOWED_IPS || "",
+
+  // redis (upstash REST) — direct upstash names or the ones Vercel's integration injects
+  KV_REST_URL: first("UPSTASH_REDIS_REST_URL", "KV_REST_API_URL") || "",
+  KV_REST_TOKEN: first("UPSTASH_REDIS_REST_TOKEN", "KV_REST_API_TOKEN") || "",
 };

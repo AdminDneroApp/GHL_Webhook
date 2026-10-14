@@ -1,4 +1,5 @@
 import { ENV } from "./env";
+import { getClientIp } from "./client-ip";
 
 // phase 0 observability — records who calls each route and the shape of what they send.
 // logs key names, tags and header presence only; never field values or token values.
@@ -9,14 +10,6 @@ const MAX_TAGS = 50;
 const MAX_TAG_LEN = 100;
 
 type TokenHeader = "x-webhook-token" | "x-dneroweb-token";
-
-function getClientIp(req: Request): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
-    req.headers.get("x-real-ip") ??
-    "unknown"
-  );
-}
 
 // "missing" | "present" when no secret is configured to compare against; "valid" | "invalid" otherwise
 function tokenStatus(req: Request, header: TokenHeader, expected: string): string {
