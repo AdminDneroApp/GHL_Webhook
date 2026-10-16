@@ -42,3 +42,4 @@ next-env.d.ts
 
 # internal EMC handoff docs (not committed)
 /docs/emc-handoff/
+.env*.local

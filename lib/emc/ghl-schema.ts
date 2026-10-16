@@ -5,7 +5,8 @@ const optionalText = (max: number) =>
   z.preprocess((v) => (v === "" ? undefined : v), z.string().max(max).optional());
 
 // standard GHL workflow "Webhook" action payload (snake_case contact fields + location / workflow /
-// customData blocks). loose: GHL adds many more keys; only the fields mapped in outbound.ts ever leave.
+// customData blocks). loose: GHL adds many more keys. only contact_id and location.id drive the intake;
+// the lead itself is read from the GHL API at send time (step 2), never forwarded from this payload.
 export const GhlEmcPayloadSchema = z.looseObject({
   contact_id: optionalText(100),
   first_name: optionalText(100),

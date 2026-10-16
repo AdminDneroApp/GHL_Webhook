@@ -4,12 +4,15 @@ import { getClientIp } from "@lib/client-ip";
 import { isAllowedGhlLocation, verifyGhlWebhookToken } from "@lib/emc/auth";
 import { SanitizeError, sanitizePayload } from "@lib/emc/sanitize";
 import { GhlEmcPayloadSchema } from "@lib/emc/ghl-schema";
-import { buildEmcLead, forwardToEmc } from "@lib/emc/outbound";
+import { runIntake } from "@lib/emc/services/intake";
+import { ENV } from "@lib/env";
+import { normalizePhone } from "@lib/phone";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// ghl → emc: a GHL workflow webhook enters here, gets sanitized, and is forwarded to EMC.
+// ghl → emc, step 1: a GHL workflow webhook (tag "emc-handoff-requested" added) enters here, gets sanitized,
+// and the intake service records the cycle/revision, removes the tag and mirrors the status. no EMC send yet.
 // server-to-server only: no OPTIONS / CORS handler, so browsers can't call this route
 const MAX_BODY_BYTES = 256 * 1024;
 
@@ -21,7 +24,6 @@ const AUTH_ERRORS: Record<number, string> = {
 export async function POST(req: Request) {
   // returned on every response and logged, so one GHL execution can be traced end to end
   const forwardId = randomUUID();
-  const receivedAt = new Date().toISOString();
   const ip = getClientIp(req);
 
   const reply = (status: number, body: Record<string, unknown>) =>
@@ -86,15 +88,45 @@ export async function POST(req: Request) {
     if (!locationId || !isAllowedGhlLocation(locationId)) {
       return reject(403, "location_not_allowed", { error: "Forbidden" });
     }
-
-    const lead = buildEmcLead(payload, locationId);
-    if (!lead.phone && !lead.email) {
-      return reject(400, "missing_identity", { error: "Missing contact identity (phone or email required)" });
+    // the GHL adapter is single-location: it uses ENV.LOCATION_ID's token and custom fields. serving
+    // other sub-accounts needs a per-location token (and field map) first.
+    if (locationId !== ENV.LOCATION_ID) {
+      return reject(403, "location_not_supported", { error: "Forbidden" });
     }
 
-    const result = await forwardToEmc(lead, { forwardId, receivedAt, workflowId: payload.workflow?.id });
+    // webhook 1 is only a trigger: the contact id is what the intake (and later the send) works from
+    const ghlContactId = payload.contact_id;
+    if (!ghlContactId) return reject(400, "missing_contact_id", { error: "Missing contact_id" });
 
-    return reply(200, { received: true, forwarded: result.forwarded, status: result.status });
+    // missing phone/email is not a 400 anymore: the intake rejects it (tag removed + note), and a 200
+    // keeps GHL from retrying
+    const hasIdentity = !!normalizePhone(payload.phone, ENV.DEFAULT_COUNTRY as "US" | "SV") || !!payload.email;
+
+    const result = await runIntake({
+      ghlContactId,
+      locationId,
+      forwardId,
+      hasIdentity,
+      workflowId: payload.workflow?.id,
+    });
+
+    console.log("EMC_GHL_INTAKE", JSON.stringify({
+      forwardId,
+      ghlContactId,
+      outcome: result.outcome,
+      handoffId: result.handoffId,
+      revision: result.revision,
+      ghlSyncPending: result.ghlSyncPending,
+      dryRun: result.dryRun,
+    }));
+
+    return reply(200, {
+      received: true,
+      outcome: result.outcome,
+      ...(result.handoffId ? { handoffId: result.handoffId } : {}),
+      ...(result.revision !== undefined ? { revision: result.revision } : {}),
+      ...(result.dryRun ? { dryRun: true } : {}),
+    });
   } catch (err) {
     console.error("EMC_GHL_ERROR", JSON.stringify({
       forwardId,
