@@ -17,4 +17,8 @@ export const flags = {
   get EMC_INTAKE_DRY_RUN(): boolean {
     return envBool("EMC_INTAKE_DRY_RUN", true);
   },
+  // TESTING ONLY: logs the sanitized webhook 1 payload WITH values (contact PII). turn off after testing.
+  get EMC_GHL_DEBUG_BODY(): boolean {
+    return envBool("EMC_GHL_DEBUG_BODY", false);
+  },
 };

@@ -5,6 +5,8 @@ import { isAllowedGhlLocation, verifyGhlWebhookToken } from "@lib/emc/auth";
 import { SanitizeError, sanitizePayload } from "@lib/emc/sanitize";
 import { GhlEmcPayloadSchema } from "@lib/emc/ghl-schema";
 import { runIntake } from "@lib/emc/services/intake";
+import { flags } from "@lib/emc/config/flags";
+import { payloadShape } from "@lib/emc/payload-shape";
 import { ENV } from "@lib/env";
 import { normalizePhone } from "@lib/phone";
 
@@ -26,11 +28,15 @@ export async function POST(req: Request) {
   const forwardId = randomUUID();
   const ip = getClientIp(req);
 
-  const reply = (status: number, body: Record<string, unknown>) =>
-    NextResponse.json({ ...body, forwardId }, {
+  // every response is logged as sent: our bodies never carry contact values (issues hold paths only)
+  const reply = (status: number, body: Record<string, unknown>) => {
+    const out = { ...body, forwardId };
+    console.log("EMC_GHL_RESPONSE", JSON.stringify({ status, body: out }));
+    return NextResponse.json(out, {
       status,
       headers: { "x-forward-id": forwardId, "Cache-Control": "no-store" },
     });
+  };
 
   const reject = (status: number, reason: string, body: Record<string, unknown>) => {
     console.warn("EMC_GHL_REJECTED", JSON.stringify({ forwardId, ip, status, reason }));
@@ -73,6 +79,13 @@ export async function POST(req: Request) {
     } catch (e) {
       if (e instanceof SanitizeError) return reject(400, "sanitize_failed", { error: "Payload rejected", reason: e.message });
       throw e;
+    }
+
+    // what GHL sent, by key names only (authenticated requests only)
+    console.log("EMC_GHL_PAYLOAD_SHAPE", JSON.stringify({ forwardId, shape: payloadShape(clean) }));
+    if (flags.EMC_GHL_DEBUG_BODY) {
+      // TESTING ONLY — contains contact PII. EMC_GHL_DEBUG_BODY must be off in normal operation
+      console.warn("EMC_GHL_DEBUG_BODY", JSON.stringify({ forwardId, body: clean }));
     }
 
     const parsed = GhlEmcPayloadSchema.safeParse(clean);
