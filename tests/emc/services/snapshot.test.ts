@@ -58,7 +58,7 @@ describe("buildSnapshot", () => {
       transfer_date: "2026-10-15",
       created_date: "2026-10-16",
       telemarketer: ["Agent Uno"],
-      transfer_to: [],
+      emc_loan_officer: [],
       add_real_estate_agent: [],
       type_of_deal: ["Refinance", "Cash Out"],
       ciudad_donde_vives_en_california: "Faketown",

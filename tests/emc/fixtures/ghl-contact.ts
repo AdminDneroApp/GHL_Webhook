@@ -10,7 +10,7 @@ export const CUSTOM_FIELDS = [
   { id: "f_transfer_date", fieldKey: "contact.transfer_date", dataType: "DATE", model: "contact" },
   { id: "f_created_date", fieldKey: "contact.created_date", dataType: "TEXT", model: "contact" },
   { id: "f_telemarketer", fieldKey: "contact.telemarketer", dataType: "MULTIPLE_OPTIONS", model: "contact" },
-  { id: "f_transfer_to", fieldKey: "contact.transfer_to", dataType: "MULTIPLE_OPTIONS", model: "contact" },
+  { id: "f_emc_loan_officer", fieldKey: "contact.emc_loan_officer", dataType: "MULTIPLE_OPTIONS", model: "contact" },
   { id: "f_rea", fieldKey: "contact.add_real_estate_agent", dataType: "MULTIPLE_OPTIONS", model: "contact" },
   { id: "f_type_of_deal", fieldKey: "contact.type_of_deal", dataType: "MULTIPLE_OPTIONS", model: "contact" },
   { id: "f_ciudad", fieldKey: "contact.ciudad_donde_vives_en_california", dataType: "TEXT", model: "contact" },
@@ -65,7 +65,7 @@ export const CONTACT = {
     { id: "f_transfer_date", value: 1792022400000 }, // epoch millis → 2026-10-15
     { id: "f_created_date", value: "10/16/2026" },
     { id: "f_telemarketer", value: ["Agent Uno"] },
-    { id: "f_transfer_to", value: [] }, // empty multi-select
+    { id: "f_emc_loan_officer", value: [] }, // empty multi-select
     // f_rea absent: never filled
     { id: "f_type_of_deal", value: ["Refinance", "Cash Out"] },
     { id: "f_ciudad", value: "Faketown" },

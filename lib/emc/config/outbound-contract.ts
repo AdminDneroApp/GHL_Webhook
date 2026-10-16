@@ -63,7 +63,7 @@ export const OUTBOUND_CONTRACT: readonly OutboundField[] = [
   custom("created_date", "date"), // a Single line field in GHL, but holds MM/DD/YYYY
   // Pre-Qualification Questions folder
   custom("telemarketer", "multi-select"),
-  custom("transfer_to", "multi-select"), // "Loan Officer" in GHL
+  custom("emc_loan_officer", "multi-select"), // replaces transfer_to ("Loan Officer")
   custom("add_real_estate_agent", "multi-select"),
   custom("type_of_deal", "multi-select"),
   custom("ciudad_donde_vives_en_california", "text"),
