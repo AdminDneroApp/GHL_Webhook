@@ -14,7 +14,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // ghl → emc, step 1: a GHL workflow webhook (tag "emc-handoff-requested" added) enters here, gets sanitized,
-// and the intake service records the cycle/revision, removes the tag and mirrors the status. no EMC send yet.
+// and the intake service records the cycle/revision, removes the tag and mirrors the status. no EMC send yet,
+// except the dry-run preview send (EMC_FORWARD_PREVIEW), which runs after the response via after().
 // server-to-server only: no OPTIONS / CORS handler, so browsers can't call this route
 const MAX_BODY_BYTES = 256 * 1024;
 
@@ -131,6 +132,7 @@ export async function POST(req: Request) {
       revision: result.revision,
       ghlSyncPending: result.ghlSyncPending,
       dryRun: result.dryRun,
+      ...(result.previewScheduled ? { previewScheduled: true } : {}),
     }));
 
     return reply(200, {

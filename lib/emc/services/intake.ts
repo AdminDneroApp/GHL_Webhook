@@ -19,9 +19,10 @@ import {
   withContactLock,
 } from "../db/repositories";
 import { decideTagEvent, type TagDecision } from "../domain/cycle";
+import { sendPreview, type PreviewDeps } from "./forward-preview";
 
 // step 1: tag "emc-handoff-requested" added → record a cycle or revision → remove the tag → mirror status.
-// nothing goes to EMC here (step 2). the DB is the source of truth; GHL writes happen after commit and
+// nothing goes to EMC here (step 2), except the dry-run preview send (EMC_FORWARD_PREVIEW). the DB is the source of truth; GHL writes happen after commit and
 // are flagged ghl_sync_pending when they fail, so a GHL outage never loses an intake.
 
 export interface IntakeInput {
@@ -41,6 +42,9 @@ export interface IntakeDeps {
   db: Database;
   ghl: IntakeGhl;
   now: () => Date;
+  // runs a task after the response is sent (next/server after() in the route)
+  after: (task: () => Promise<void>) => void;
+  preview: Partial<PreviewDeps>;
 }
 
 export type IntakeOutcome = "new_cycle" | "revision" | "rejected" | "disabled";
@@ -52,6 +56,13 @@ export interface IntakeResult {
   previousHandoffId?: string;
   ghlSyncPending: boolean;
   dryRun: boolean;
+  previewScheduled?: true; // dry run + EMC_FORWARD_PREVIEW: a preview send runs after the response
+}
+
+// resolved only when a preview is scheduled, so tests and non-request callers never touch next/server
+async function nextAfter(task: () => Promise<void>): Promise<void> {
+  const { after } = await import("next/server");
+  after(task);
 }
 
 // what failed on the GHL side — op name and HTTP status only, never a body
@@ -128,9 +139,31 @@ export async function runIntake(input: IntakeInput, deps: Partial<IntakeDeps> = 
   // --- dry run: decide only (reads under the lock), no writes, no GHL
   if (dryRun) {
     const decision = await withContactLock(ghlContactId, (tx) => decide(tx, ghlContactId), db);
-    return decision.kind === "new_cycle"
-      ? { outcome: "new_cycle", revision: 1, previousHandoffId: decision.previousHandoffId, ghlSyncPending: false, dryRun: true }
-      : { outcome: "revision", handoffId: decision.handoffId, revision: decision.revision, ghlSyncPending: false, dryRun: true };
+    const result: IntakeResult =
+      decision.kind === "new_cycle"
+        ? { outcome: "new_cycle", revision: 1, previousHandoffId: decision.previousHandoffId, ghlSyncPending: false, dryRun: true }
+        : { outcome: "revision", handoffId: decision.handoffId, revision: decision.revision, ghlSyncPending: false, dryRun: true };
+
+    // preview send: after the response, so GHL gets its 200 right away. reads GHL, writes nothing
+    if (flags.EMC_FORWARD_PREVIEW) {
+      const task = () =>
+        sendPreview(
+          {
+            ghlContactId,
+            forwardId,
+            revision: result.revision!,
+            type: decision.kind === "new_cycle" ? "create" : "update",
+            ...(decision.kind === "new_cycle" && decision.previousHandoffId
+              ? { previousHandoffId: decision.previousHandoffId }
+              : {}),
+          },
+          deps.preview,
+        );
+      if (deps.after) deps.after(task);
+      else await nextAfter(task);
+      result.previewScheduled = true;
+    }
+    return result;
   }
 
   // --- record the cycle / revision. short transaction: no GHL calls while the lock is held

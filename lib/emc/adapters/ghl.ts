@@ -74,7 +74,10 @@ export interface GhlCustomField {
   fieldKey: string; // e.g. "contact.emc_handoff_status"
   dataType: string;
   model?: string;
-  picklistOptions?: string[];
+  picklistOptions?: unknown[]; // strings for dropdowns
+  // TEXTBOX_LIST options. documented on the create/update DTO as { label, prefillValue }; the read schema
+  // doesn't list it, so the snapshot builder reads it (and object-shaped picklistOptions) defensively
+  textBoxListOptions?: unknown[];
   [k: string]: unknown;
 }
 
@@ -167,6 +170,16 @@ export async function createContactNote(
   const id = r.note?.id;
   if (!id) throw new GhlApiError("POST", `/contacts/${enc(contactId)}/notes`, 200, "response had no note id");
   return id;
+}
+
+// GET /contacts/{id}/notes → { notes: [{ id, body, userId, dateAdded, contactId, title, color, pinned }] }.
+// `title` is in GHL's OpenAPI read schema (GetNoteSchema) but notes made in the UI may have none → "".
+export async function listContactNotes(contactId: string): Promise<{ title: string; body: string }[]> {
+  const r = await ghlFetch<{ notes?: { title?: unknown; body?: unknown }[] }>("GET", `/contacts/${enc(contactId)}/notes`);
+  return (r.notes ?? []).map((n) => ({
+    title: typeof n.title === "string" ? n.title : "",
+    body: typeof n.body === "string" ? n.body : "",
+  }));
 }
 
 // --- contacts ---

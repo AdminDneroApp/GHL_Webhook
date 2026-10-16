@@ -17,7 +17,13 @@ export const flags = {
   get EMC_INTAKE_DRY_RUN(): boolean {
     return envBool("EMC_INTAKE_DRY_RUN", true);
   },
-  // TESTING ONLY: logs the sanitized webhook 1 payload WITH values (contact PII). turn off after testing.
+  // preview send: while the intake is in dry run, build the real webhook 2 body from GHL and POST it to
+  // EMC_WEBHOOK_URL (fresh preview handoffId, nothing written to the DB or GHL), so EMC gets real examples
+  get EMC_FORWARD_PREVIEW(): boolean {
+    return envBool("EMC_FORWARD_PREVIEW", false);
+  },
+  // TESTING ONLY: logs the sanitized webhook 1 payload (and, with EMC_FORWARD_PREVIEW, the outgoing
+  // webhook 2 body) WITH values (contact PII). turn off after testing.
   get EMC_GHL_DEBUG_BODY(): boolean {
     return envBool("EMC_GHL_DEBUG_BODY", false);
   },

@@ -146,3 +146,24 @@ describe("createContactNote / formatGhlDateTime", () => {
     expect(() => ghl.formatGhlDateTime(new Date("nope"))).toThrow();
   });
 });
+
+describe("listContactNotes", () => {
+  it("returns { title, body } only, with title \"\" when GHL has none", async () => {
+    fetchMock.mockResolvedValueOnce(
+      json({
+        notes: [
+          { id: "n1", body: "first", userId: "u", dateAdded: "2026-10-16T00:00:00Z", contactId: "c_1", title: "T1" },
+          { id: "n2", body: "second", userId: "u", dateAdded: "2026-10-16T00:00:00Z", contactId: "c_1" },
+        ],
+      }),
+    );
+    const ghl = await load();
+    expect(await ghl.listContactNotes("c_1")).toEqual([
+      { title: "T1", body: "first" },
+      { title: "", body: "second" },
+    ]);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://ghl.test/contacts/c_1/notes");
+    expect(init.method).toBe("GET");
+  });
+});

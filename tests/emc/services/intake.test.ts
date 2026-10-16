@@ -7,6 +7,7 @@ import type { Database } from "@lib/emc/db/client";
 import { getCycle, getRevisions } from "@lib/emc/db/repositories";
 import { handoffCycles, handoffEvents } from "@lib/emc/db/schema";
 import { runIntake, type IntakeGhl, type IntakeInput } from "@lib/emc/services/intake";
+import type { PreviewDeps } from "@lib/emc/services/forward-preview";
 import { createTestDb } from "../helpers/pglite";
 
 let db: Database;
@@ -240,5 +241,141 @@ describe("runIntake", () => {
     expect([a.outcome, b.outcome].sort()).toEqual(["new_cycle", "revision"]);
     expect(await db.select().from(handoffCycles)).toHaveLength(1);
     expect(ghl.updateContactCustomFields).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("runIntake preview send (EMC_FORWARD_PREVIEW)", () => {
+  const SNAPSHOT_BODY = {
+    contact: { firstName: null, lastName: null, email: null, phone: null },
+    fields: {},
+    notes: [],
+  };
+
+  function previewHarness() {
+    const tasks: (() => Promise<void>)[] = [];
+    const sendToEmc = vi.fn<PreviewDeps["sendToEmc"]>(async () => ({ classification: "sent", status: 200, externalId: "EMC-1" }));
+    const buildSnapshot = vi.fn<PreviewDeps["buildSnapshot"]>(async (contactId, envelope) => ({
+      body: { ...envelope, ghlContactId: contactId, ...SNAPSHOT_BODY },
+      warnings: [],
+    }));
+    const deps = {
+      db,
+      ghl,
+      now: () => NOW,
+      after: (t: () => Promise<void>) => void tasks.push(t),
+      preview: { sendToEmc, buildSnapshot, newId: () => "preview-1", now: () => NOW },
+    };
+    const flush = () => Promise.all(tasks.splice(0).map((t) => t()));
+    return { deps, tasks, flush, sendToEmc, buildSnapshot };
+  }
+
+  beforeEach(() => {
+    vi.stubEnv("EMC_FORWARD_PREVIEW", "true");
+    vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("dry run + preview → one send after the response, Idempotency-Key <handoffId>:r1, nothing written", async () => {
+    vi.stubEnv("EMC_INTAKE_DRY_RUN", "true");
+    const h = previewHarness();
+
+    const r = await runIntake(input(), h.deps);
+    expect(r).toMatchObject({ outcome: "new_cycle", revision: 1, dryRun: true, previewScheduled: true });
+    // scheduled, not run yet: GHL gets its 200 first
+    expect(h.tasks).toHaveLength(1);
+    expect(h.sendToEmc).not.toHaveBeenCalled();
+
+    await h.flush();
+    expect(h.buildSnapshot).toHaveBeenCalledTimes(1);
+    expect(h.buildSnapshot.mock.calls[0][0]).toBe("c1");
+    expect(h.buildSnapshot.mock.calls[0][1]).toEqual({
+      handoffId: "preview-1",
+      revision: 1,
+      type: "create",
+      changedFields: [],
+      sentAt: NOW.toISOString(),
+    });
+    expect(h.sendToEmc).toHaveBeenCalledTimes(1);
+    expect(h.sendToEmc.mock.calls[0][1]).toBe("preview-1:r1");
+
+    const logged = (console.log as unknown as ReturnType<typeof vi.fn>).mock.calls.find(([tag]) => tag === "EMC_FORWARD_PREVIEW");
+    expect(JSON.parse(logged![1] as string)).toEqual({
+      forwardId: "fwd-1",
+      handoffId: "preview-1",
+      revision: 1,
+      type: "create",
+      status: 200,
+      classification: "sent",
+      externalIdPresent: true,
+      fieldCount: 5, // the stub body: 4 contact keys + notes
+      filledCount: 0,
+      notesCount: 0,
+      warnings: [],
+    });
+
+    expect(await db.select().from(handoffCycles)).toHaveLength(0);
+    expect(await events()).toHaveLength(0);
+    for (const fn of Object.values(ghl)) expect(fn).not.toHaveBeenCalled();
+  });
+
+  it("dry run + preview with an active cycle → update, r2, fresh preview handoffId", async () => {
+    await run(); // a real r1 (not dry run)
+    vi.stubEnv("EMC_INTAKE_DRY_RUN", "true");
+    const h = previewHarness();
+
+    expect(await runIntake(input(), h.deps)).toMatchObject({ outcome: "revision", revision: 2, previewScheduled: true });
+    await h.flush();
+    expect(h.buildSnapshot.mock.calls[0][1]).toMatchObject({ handoffId: "preview-1", revision: 2, type: "update", changedFields: [] });
+    expect(h.sendToEmc.mock.calls[0][1]).toBe("preview-1:r2");
+  });
+
+  it("debug flag also logs the outgoing body", async () => {
+    vi.stubEnv("EMC_INTAKE_DRY_RUN", "true");
+    vi.stubEnv("EMC_GHL_DEBUG_BODY", "true");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const h = previewHarness();
+    await runIntake(input(), h.deps);
+    await h.flush();
+    expect(warn.mock.calls.map(([tag]) => tag)).toEqual(["EMC_FORWARD_DEBUG_BODY"]);
+  });
+
+  it("a failing preview never throws and logs no values", async () => {
+    vi.stubEnv("EMC_INTAKE_DRY_RUN", "true");
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const h = previewHarness();
+    h.buildSnapshot.mockRejectedValueOnce(new GhlApiError("GET", "/contacts/c1", 404));
+    await runIntake(input(), h.deps);
+    await expect(h.flush()).resolves.toBeDefined();
+    expect(h.sendToEmc).not.toHaveBeenCalled();
+    const [tag, json] = err.mock.calls[0] as [string, string];
+    expect(tag).toBe("EMC_FORWARD_PREVIEW_ERROR");
+    expect(JSON.parse(json)).toMatchObject({ forwardId: "fwd-1", handoffId: "preview-1", error: "GhlApiError", status: 404 });
+  });
+
+  it("preview flag off → no send", async () => {
+    vi.stubEnv("EMC_INTAKE_DRY_RUN", "true");
+    vi.stubEnv("EMC_FORWARD_PREVIEW", "false");
+    const h = previewHarness();
+    const r = await runIntake(input(), h.deps);
+    expect(r.previewScheduled).toBeUndefined();
+    expect(h.tasks).toHaveLength(0);
+  });
+
+  it("not dry run → no preview send (live forwarding comes later)", async () => {
+    const h = previewHarness();
+    const r = await runIntake(input(), h.deps);
+    expect(r).toMatchObject({ outcome: "new_cycle", dryRun: false });
+    expect(r.previewScheduled).toBeUndefined();
+    expect(h.tasks).toHaveLength(0);
+  });
+
+  it("dry run, missing identity → no preview send", async () => {
+    vi.stubEnv("EMC_INTAKE_DRY_RUN", "true");
+    const h = previewHarness();
+    await runIntake(input({ hasIdentity: false }), h.deps);
+    expect(h.tasks).toHaveLength(0);
   });
 });
