@@ -17,7 +17,7 @@ export interface EmcRequestInfo {
   headerNames: string[];
   auth: {
     header: "Authorization";
-    scheme: "Bearer";
+    scheme: "raw";
     tokenLength: number;
     tokenSha256: string; // first 8 hex chars, to compare with: printf %s "<token>" | shasum -a 256
     hadBearerPrefix: boolean; // EMC_BEARER was saved as "Bearer …" (stripped before sending)
@@ -66,10 +66,10 @@ function authHeader(): { headers: Record<string, string>; info: EmcRequestInfo["
   const token = trimmed.replace(/^Bearer\s+/i, "");
   if (!token) return { headers: {}, info: null };
   return {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: token }, // raw token, no "Bearer " prefix (EMC's n8n header auth)
     info: {
       header: "Authorization",
-      scheme: "Bearer",
+      scheme: "raw",
       tokenLength: token.length,
       tokenSha256: createHash("sha256").update(token).digest("hex").slice(0, 8),
       hadBearerPrefix: token !== trimmed,
