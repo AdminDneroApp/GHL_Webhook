@@ -40,7 +40,7 @@ describe("sendToEmc", () => {
       vi.stubEnv("EMC_BEARER", value);
       fetchMock.mockResolvedValueOnce(res(200));
       await sendToEmc(BODY, KEY);
-      expect(fetchMock.mock.lastCall![1].headers.Authorization).toBe("Bearer tok-123");
+      expect(fetchMock.mock.lastCall![1].headers["dnero-auth"]).toBe("tok-123");
     }
   });
 
@@ -48,17 +48,17 @@ describe("sendToEmc", () => {
     vi.stubEnv("EMC_BEARER", "");
     fetchMock.mockResolvedValueOnce(res(200));
     await sendToEmc(BODY, KEY);
-    expect(fetchMock.mock.lastCall![1].headers).not.toHaveProperty("Authorization");
+    expect(fetchMock.mock.lastCall![1].headers).not.toHaveProperty("dnero-auth");
   });
 
   it("200 with externalId → sent + externalId", async () => {
     fetchMock.mockResolvedValueOnce(res(200, { externalId: "EMC-998" }));
-    expect(await sendToEmc(BODY, KEY)).toEqual({ classification: "sent", status: 200, externalId: "EMC-998" });
+    expect((await sendToEmc(BODY, KEY))).toEqual({ classification: "sent", status: 200, externalId: "EMC-998" });
   });
 
   it("200 with externalId inside an n8n array → sent + externalId", async () => {
     fetchMock.mockResolvedValueOnce(res(200, [{ externalId: 42 }]));
-    expect(await sendToEmc(BODY, KEY)).toEqual({ classification: "sent", status: 200, externalId: "42" });
+    expect((await sendToEmc(BODY, KEY))).toEqual({ classification: "sent", status: 200, externalId: "42" });
   });
 
   it("200 without externalId (or not JSON, or empty) → still sent", async () => {
@@ -75,7 +75,7 @@ describe("sendToEmc", () => {
 
   it("a response body over 16 KB is cut: still sent, no externalId", async () => {
     fetchMock.mockResolvedValueOnce(res(200, { pad: "x".repeat(20_000), externalId: "late" }));
-    expect(await sendToEmc(BODY, KEY)).toEqual({ classification: "sent", status: 200 });
+    expect((await sendToEmc(BODY, KEY))).toEqual({ classification: "sent", status: 200 });
   });
 
   it.each([
@@ -90,24 +90,24 @@ describe("sendToEmc", () => {
     [409, "closed"],
   ] as const)("HTTP %i → %s", async (status, classification) => {
     fetchMock.mockResolvedValueOnce(res(status, { error: "x", echo: BODY }));
-    expect(await sendToEmc(BODY, KEY)).toEqual({ classification, status });
+    expect((await sendToEmc(BODY, KEY))).toEqual({ classification, status });
   });
 
   it("timeout → retry, status 0", async () => {
     fetchMock.mockRejectedValueOnce(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
-    expect(await sendToEmc(BODY, KEY)).toEqual({ classification: "retry", status: 0, reason: "timeout" });
+    expect((await sendToEmc(BODY, KEY))).toEqual({ classification: "retry", status: 0, reason: "timeout" });
   });
 
   it("network error → retry, the cause (which may echo the request) is dropped", async () => {
     fetchMock.mockRejectedValueOnce(new TypeError(`fetch failed ${JSON.stringify(BODY)}`));
     const r = await sendToEmc(BODY, KEY);
-    expect(r).toEqual({ classification: "retry", status: 0, reason: "network_error" });
+    expect((r)).toEqual({ classification: "retry", status: 0, reason: "network_error" });
     expect(JSON.stringify(r)).not.toContain("jane.doe");
   });
 
   it("a redirect is not followed → failed", async () => {
     fetchMock.mockResolvedValueOnce(res(302, undefined, { Location: "https://elsewhere.test/" }));
-    expect(await sendToEmc(BODY, KEY)).toEqual({ classification: "failed", status: 302, reason: "redirect" });
+    expect((await sendToEmc(BODY, KEY))).toEqual({ classification: "failed", status: 302, reason: "redirect" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

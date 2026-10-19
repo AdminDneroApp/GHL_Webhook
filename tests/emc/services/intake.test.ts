@@ -253,7 +253,11 @@ describe("runIntake preview send (EMC_FORWARD_PREVIEW)", () => {
 
   function previewHarness() {
     const tasks: (() => Promise<void>)[] = [];
-    const sendToEmc = vi.fn<PreviewDeps["sendToEmc"]>(async () => ({ classification: "sent", status: 200, externalId: "EMC-1" }));
+    const sendToEmc = vi.fn<PreviewDeps["sendToEmc"]>(async () => ({
+      classification: "sent",
+      status: 200,
+      externalId: "EMC-1",
+    }));
     const buildSnapshot = vi.fn<PreviewDeps["buildSnapshot"]>(async (contactId, envelope) => ({
       body: { ...envelope, ghlContactId: contactId, ...SNAPSHOT_BODY },
       warnings: [],

@@ -2,8 +2,6 @@
 // rule: request and response bodies hold contact PII — they never go into errors or logs. callers get
 // the status, the classification and externalId (EMC's lead id) only.
 
-import { createHash } from "crypto";
-
 const TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 16 * 1024;
 const MAX_EXTERNAL_ID_LENGTH = 200;
@@ -11,34 +9,12 @@ const MAX_EXTERNAL_ID_LENGTH = 200;
 // sent: EMC has it · retry: try again later · failed: EMC refused it · closed: 409, EMC closed the lead
 export type EmcClassification = "sent" | "retry" | "failed" | "closed";
 
-// what was sent, for diagnostics — header names, never header values; the token only as length + hash
-export interface EmcRequestInfo {
-  target: string; // host + first path segment, e.g. "emortgage.app.n8n.cloud/webhook" (vs /webhook-test)
-  headerNames: string[];
-  auth: {
-    header: "dnero-auth";
-    scheme: "raw";
-    tokenLength: number;
-    tokenSha256: string; // first 8 hex chars, to compare with: printf %s "<token>" | shasum -a 256
-    hadBearerPrefix: boolean; // EMC_BEARER was saved as "Bearer …" (stripped before sending)
-    hadSurroundingSpaces: boolean; // EMC_BEARER had leading/trailing whitespace (trimmed before sending)
-  } | null;
-}
-
 export interface EmcSendResult {
   classification: EmcClassification;
   status: number; // HTTP status, 0 when no response arrived
   externalId?: string;
   reason?: "timeout" | "network_error" | "redirect";
-  request: EmcRequestInfo;
-  errorBody?: string; // only with { captureErrorBody: true } and a non-2xx — the caller gates it behind a debug flag
 }
-
-export interface EmcSendOptions {
-  captureErrorBody?: boolean;
-}
-
-const MAX_ERROR_BODY_CHARS = 1000;
 
 export class EmcConfigError extends Error {
   constructor(message: string) {
@@ -58,29 +34,11 @@ function webhookUrl(): string {
   }
 }
 
-// EMC's webhook auth (EMC_BEARER, set by EMC). sent only when configured, so the send keeps working if
-// EMC ever drops auth. accepts the token with or without a "Bearer " prefix. never logged.
-function authHeader(): { headers: Record<string, string>; info: EmcRequestInfo["auth"] } {
-  const raw = process.env.EMC_BEARER ?? "";
-  const trimmed = raw.trim();
-  const token = trimmed.replace(/^Bearer\s+/i, "");
-  if (!token) return { headers: {}, info: null };
-  return {
-    headers: { "dnero-auth": token }, // raw token in EMC's custom n8n auth header
-    info: {
-      header: "dnero-auth",
-      scheme: "raw",
-      tokenLength: token.length,
-      tokenSha256: createHash("sha256").update(token).digest("hex").slice(0, 8),
-      hadBearerPrefix: token !== trimmed,
-      hadSurroundingSpaces: raw !== trimmed,
-    },
-  };
-}
-
-function targetOf(url: string): string {
-  const u = new URL(url);
-  return `${u.host}/${u.pathname.split("/").filter(Boolean)[0] ?? ""}`;
+// EMC's webhook auth: the raw token (EMC_BEARER) in their custom n8n header "dnero-auth". sent only when
+// configured, so the send keeps working if EMC ever drops auth. a saved "Bearer " prefix is stripped. never logged.
+function authHeader(): Record<string, string> {
+  const token = process.env.EMC_BEARER?.trim().replace(/^Bearer\s+/i, "");
+  return token ? { "dnero-auth": token } : {};
 }
 
 export function classifyStatus(status: number): EmcClassification {
@@ -124,26 +82,19 @@ function externalIdFrom(text: string): string | undefined {
   return undefined;
 }
 
-export async function sendToEmc(
-  body: unknown,
-  idempotencyKey: string,
-  opts: EmcSendOptions = {},
-): Promise<EmcSendResult> {
+export async function sendToEmc(body: unknown, idempotencyKey: string): Promise<EmcSendResult> {
   const url = webhookUrl();
-  const auth = authHeader();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    "Idempotency-Key": idempotencyKey,
-    ...auth.headers,
-  };
-  const request: EmcRequestInfo = { target: targetOf(url), headerNames: Object.keys(headers), auth: auth.info };
 
   let res: Response;
   try {
     res = await fetch(url, {
       method: "POST",
-      headers,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "Idempotency-Key": idempotencyKey,
+        ...authHeader(),
+      },
       body: JSON.stringify(body),
       redirect: "manual",
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -152,23 +103,16 @@ export async function sendToEmc(
     // the cause is dropped on purpose: undici errors can echo request details
     const name = err instanceof Error ? err.name : "";
     const reason = name === "TimeoutError" || name === "AbortError" ? "timeout" : "network_error";
-    return { classification: "retry", status: 0, reason, request };
+    return { classification: "retry", status: 0, reason };
   }
 
   const classification = classifyStatus(res.status);
   if (classification !== "sent") {
-    let errorBody: string | undefined;
-    if (opts.captureErrorBody) {
-      errorBody = await readCapped(res).then((t) => t.slice(0, MAX_ERROR_BODY_CHARS)).catch(() => undefined);
-    } else {
-      await res.body?.cancel().catch(() => {});
-    }
+    await res.body?.cancel().catch(() => {});
     return {
       classification,
       status: res.status,
       ...(res.status >= 300 && res.status < 400 ? { reason: "redirect" as const } : {}),
-      request,
-      ...(errorBody !== undefined ? { errorBody } : {}),
     };
   }
 
@@ -178,5 +122,5 @@ export async function sendToEmc(
   } catch {
     // body read failed after a 2xx: EMC has the lead, just no id
   }
-  return { classification, status: res.status, ...(externalId ? { externalId } : {}), request };
+  return { classification, status: res.status, ...(externalId ? { externalId } : {}) };
 }
