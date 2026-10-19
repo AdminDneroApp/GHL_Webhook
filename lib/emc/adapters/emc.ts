@@ -16,7 +16,7 @@ export interface EmcRequestInfo {
   target: string; // host + first path segment, e.g. "emortgage.app.n8n.cloud/webhook" (vs /webhook-test)
   headerNames: string[];
   auth: {
-    header: "Authorization";
+    header: "dnero-auth";
     scheme: "raw";
     tokenLength: number;
     tokenSha256: string; // first 8 hex chars, to compare with: printf %s "<token>" | shasum -a 256
@@ -66,9 +66,9 @@ function authHeader(): { headers: Record<string, string>; info: EmcRequestInfo["
   const token = trimmed.replace(/^Bearer\s+/i, "");
   if (!token) return { headers: {}, info: null };
   return {
-    headers: { Authorization: token }, // raw token, no "Bearer " prefix (EMC's n8n header auth)
+    headers: { "dnero-auth": token }, // raw token in EMC's custom n8n auth header
     info: {
-      header: "Authorization",
+      header: "dnero-auth",
       scheme: "raw",
       tokenLength: token.length,
       tokenSha256: createHash("sha256").update(token).digest("hex").slice(0, 8),
