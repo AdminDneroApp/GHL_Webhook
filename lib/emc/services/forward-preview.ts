@@ -46,7 +46,8 @@ export async function sendPreview(input: PreviewInput, deps: Partial<PreviewDeps
       console.warn("EMC_FORWARD_DEBUG_BODY", JSON.stringify({ forwardId, handoffId, body }));
     }
 
-    const result = await send(body, `${handoffId}:r${revision}`);
+    const debug = flags.EMC_GHL_DEBUG_BODY;
+    const result = await send(body, `${handoffId}:r${revision}`, { captureErrorBody: debug });
 
     // names and counts only — never values
     console.log("EMC_FORWARD_PREVIEW", JSON.stringify({
@@ -62,7 +63,14 @@ export async function sendPreview(input: PreviewInput, deps: Partial<PreviewDeps
       filledCount: countFilled(body),
       notesCount: body.notes.length,
       warnings,
+      // header names, target and token fingerprint only — never the token
+      request: result.request,
     }));
+
+    if (debug && result.errorBody !== undefined) {
+      // TESTING ONLY — EMC's error response (e.g. n8n's auth message); could echo data, so behind the debug flag
+      console.warn("EMC_FORWARD_DEBUG_RESPONSE", JSON.stringify({ forwardId, handoffId, status: result.status, body: result.errorBody }));
+    }
   } catch (err) {
     // GhlApiError / EmcConfigError messages carry method, path, status or the env var name, never a body
     const safe = err instanceof GhlApiError || err instanceof EmcConfigError;
