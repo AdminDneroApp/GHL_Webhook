@@ -35,6 +35,22 @@ describe("sendToEmc", () => {
     expect(JSON.parse(init.body)).toEqual(BODY);
   });
 
+  it("sends Authorization: Bearer from EMC_BEARER, with or without the prefix", async () => {
+    for (const value of ["tok-123", "Bearer tok-123", "  tok-123  "]) {
+      vi.stubEnv("EMC_BEARER", value);
+      fetchMock.mockResolvedValueOnce(res(200));
+      await sendToEmc(BODY, KEY);
+      expect(fetchMock.mock.lastCall![1].headers.Authorization).toBe("Bearer tok-123");
+    }
+  });
+
+  it("sends no Authorization header when EMC_BEARER is not set", async () => {
+    vi.stubEnv("EMC_BEARER", "");
+    fetchMock.mockResolvedValueOnce(res(200));
+    await sendToEmc(BODY, KEY);
+    expect(fetchMock.mock.lastCall![1].headers).not.toHaveProperty("Authorization");
+  });
+
   it("200 with externalId → sent + externalId", async () => {
     fetchMock.mockResolvedValueOnce(res(200, { externalId: "EMC-998" }));
     expect(await sendToEmc(BODY, KEY)).toEqual({ classification: "sent", status: 200, externalId: "EMC-998" });

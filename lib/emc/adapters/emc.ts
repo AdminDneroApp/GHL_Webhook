@@ -34,6 +34,13 @@ function webhookUrl(): string {
   }
 }
 
+// EMC's webhook auth (EMC_BEARER, set by EMC). sent only when configured, so the send keeps working if
+// EMC ever drops auth. accepts the token with or without a "Bearer " prefix. never logged.
+function authHeader(): Record<string, string> {
+  const token = process.env.EMC_BEARER?.trim().replace(/^Bearer\s+/i, "");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export function classifyStatus(status: number): EmcClassification {
   if (status >= 200 && status < 300) return "sent";
   if (status === 409) return "closed";
@@ -86,6 +93,7 @@ export async function sendToEmc(body: unknown, idempotencyKey: string): Promise<
         "Content-Type": "application/json",
         Accept: "application/json",
         "Idempotency-Key": idempotencyKey,
+        ...authHeader(),
       },
       body: JSON.stringify(body),
       redirect: "manual",
