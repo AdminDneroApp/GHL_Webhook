@@ -3,6 +3,12 @@ import { GhlApiError } from "../adapters/ghl";
 import { EmcConfigError, sendToEmc } from "../adapters/emc";
 import { flags } from "../config/flags";
 import { buildSnapshot, countFilled, type Webhook2Type } from "./snapshot";
+import { updateContactCustomFields } from "../adapters/ghl";
+import { EMC_FIELD_EXTERNAL_ID } from "../config/intake";
+
+async function saveExternalIdOnContact(contactId: string, externalId: string): Promise<void> {
+  await updateContactCustomFields(contactId, { [EMC_FIELD_EXTERNAL_ID]: externalId });
+}
 
 // preview send (EMC_FORWARD_PREVIEW + intake dry run): the real webhook 2 body, built from GHL and POSTed
 // to EMC so they can build against real examples. a fresh preview handoffId every time; nothing is
@@ -20,7 +26,10 @@ export interface PreviewDeps {
   buildSnapshot: typeof buildSnapshot;
   sendToEmc: typeof sendToEmc;
   newId: () => string;
+  newExternalId: () => string;
   now: () => Date;
+  // saves a newly created external id on the contact (emc_handoff_external_id)
+  saveExternalId: (contactId: string, externalId: string) => Promise<void>;
 }
 
 // never throws: it runs inside after(), where an error would only surface as an unhandled rejection
@@ -41,6 +50,16 @@ export async function sendPreview(input: PreviewInput, deps: Partial<PreviewDeps
       sentAt: now().toISOString(),
     });
 
+    // the contact's permanent external id: created once, saved on the contact BEFORE sending, so EMC never
+    // gets an id the contact doesn't keep. if saving fails, nothing is sent (the catch below logs it)
+    let externalIdCreated = false;
+    if (!body.externalId) {
+      const externalId = (deps.newExternalId ?? randomUUID)();
+      await (deps.saveExternalId ?? saveExternalIdOnContact)(input.ghlContactId, externalId);
+      body.externalId = externalId;
+      externalIdCreated = true;
+    }
+
     if (flags.EMC_GHL_DEBUG_BODY) {
       // TESTING ONLY — contains contact PII. EMC_GHL_DEBUG_BODY must be off in normal operation
       console.warn("EMC_FORWARD_DEBUG_BODY", JSON.stringify({ forwardId, handoffId, body }));
@@ -57,7 +76,7 @@ export async function sendPreview(input: PreviewInput, deps: Partial<PreviewDeps
       status: result.status,
       classification: result.classification,
       ...(result.reason ? { reason: result.reason } : {}),
-      externalIdPresent: !!result.externalId,
+      externalIdCreated,
       fieldCount: Object.keys(body.contact).length + Object.keys(body.fields).length + 1,
       filledCount: countFilled(body),
       notesCount: body.notes.length,

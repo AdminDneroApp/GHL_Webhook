@@ -72,11 +72,9 @@ describe("runIntake", () => {
     expect(cycle).toMatchObject({ status: "requested", latestRevision: 1, ghlSyncPending: false, locationId: "loc-1" });
 
     expect(ghl.removeContactTags).toHaveBeenCalledWith("c1", [EMC_HANDOFF_TAG]);
-    // the previous cycle's EMC id is cleared together with status and time
     expect(ghl.updateContactCustomFields).toHaveBeenCalledWith("c1", {
       emc_handoff_status: "requested",
       emc_handoff_time: "2026-10-16 12:00:00 UTC",
-      emc_handoff_external_id: null,
     });
     expect((await events()).map((e) => [e.event, e.direction, e.revision])).toEqual([
       ["requested", "agent_to_dnero", 1],
@@ -114,13 +112,13 @@ describe("runIntake", () => {
     expect((await getCycle(db, second.handoffId!))?.previousHandoffId).toBe(first.handoffId);
   });
 
-  it("every new cycle clears emc_handoff_external_id in GHL", async () => {
+  it("a new cycle never touches emc_handoff_external_id (permanent per-contact id)", async () => {
     const first = await run();
     await closeCycle(first.handoffId!, "completed");
     ghl = mockGhl();
     await run();
     expect(ghl.updateContactCustomFields).toHaveBeenCalledTimes(1);
-    expect(ghl.updateContactCustomFields.mock.calls[0][1]).toMatchObject({ emc_handoff_external_id: null });
+    expect(ghl.updateContactCustomFields.mock.calls[0][1]).not.toHaveProperty("emc_handoff_external_id");
   });
 
   it("after a failed cycle → new cycle without previousHandoffId", async () => {
@@ -246,6 +244,7 @@ describe("runIntake", () => {
 
 describe("runIntake preview send (EMC_FORWARD_PREVIEW)", () => {
   const SNAPSHOT_BODY = {
+    externalId: null,
     contact: { firstName: null, lastName: null, email: null, phone: null },
     fields: {},
     notes: [],
@@ -258,6 +257,7 @@ describe("runIntake preview send (EMC_FORWARD_PREVIEW)", () => {
       status: 200,
       externalId: "EMC-1",
     }));
+    const saveExternalId = vi.fn<PreviewDeps["saveExternalId"]>(async () => {});
     const buildSnapshot = vi.fn<PreviewDeps["buildSnapshot"]>(async (contactId, envelope) => ({
       body: { ...envelope, ghlContactId: contactId, ...SNAPSHOT_BODY },
       warnings: [],
@@ -267,7 +267,7 @@ describe("runIntake preview send (EMC_FORWARD_PREVIEW)", () => {
       ghl,
       now: () => NOW,
       after: (t: () => Promise<void>) => void tasks.push(t),
-      preview: { sendToEmc, buildSnapshot, newId: () => "preview-1", now: () => NOW },
+      preview: { sendToEmc, buildSnapshot, saveExternalId, newId: () => "preview-1", newExternalId: () => "ext-new", now: () => NOW },
     };
     const flush = () => Promise.all(tasks.splice(0).map((t) => t()));
     return { deps, tasks, flush, sendToEmc, buildSnapshot };
@@ -313,7 +313,7 @@ describe("runIntake preview send (EMC_FORWARD_PREVIEW)", () => {
       type: "create",
       status: 200,
       classification: "sent",
-      externalIdPresent: true,
+      externalIdCreated: true,
       fieldCount: 5, // the stub body: 4 contact keys + notes
       filledCount: 0,
       notesCount: 0,

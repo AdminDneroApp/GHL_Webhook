@@ -7,6 +7,7 @@ import {
   type NormalizeContext,
 } from "../config/outbound-contract";
 import { ENV } from "@lib/env";
+import { EMC_FIELD_EXTERNAL_ID } from "../config/intake";
 
 // step 2: the webhook 2 body, built from the GHL API (never from the webhook 1 payload: its custom
 // fields are keyed by display name). every revision sends the full lead.
@@ -26,6 +27,8 @@ export interface Webhook2Envelope {
 export interface Webhook2Body extends Omit<Webhook2Envelope, "previousHandoffId"> {
   previousHandoffId?: string;
   ghlContactId: string;
+  // DNERO's permanent id for this lead, kept on the contact (emc_handoff_external_id). null until created
+  externalId: string | null;
   contact: Record<string, OutboundValue>;
   fields: Record<string, OutboundValue>;
   notes: { title: string; body: string }[];
@@ -118,6 +121,11 @@ export async function buildSnapshot(
     out[entry.section === "contact" ? "contact" : "fields"][entry.outKey] = normalizeValue(entry.type, raw, ctx);
   }
 
+  const extDef = defsByKey.get(EMC_FIELD_EXTERNAL_ID);
+  if (!extDef) warn(`missing_field:${EMC_FIELD_EXTERNAL_ID}`);
+  const extRaw = extDef ? valuesById.get(extDef.id) : undefined;
+  const externalId = typeof extRaw === "string" && extRaw.trim() ? extRaw.trim() : null;
+
   const { previousHandoffId, ...rest } = envelope;
   const body: Webhook2Body = {
     handoffId: rest.handoffId,
@@ -126,6 +134,7 @@ export async function buildSnapshot(
     changedFields: rest.changedFields,
     ...(previousHandoffId ? { previousHandoffId } : {}),
     ghlContactId: contactId,
+    externalId,
     sentAt: rest.sentAt,
     contact: out.contact,
     fields: out.fields,

@@ -41,10 +41,10 @@ describe("buildSnapshot", () => {
     const { body, warnings } = await build();
 
     expect(Object.keys(body)).toEqual([
-      "handoffId", "revision", "type", "changedFields", "ghlContactId", "sentAt", "contact", "fields", "notes",
+      "handoffId", "revision", "type", "changedFields", "ghlContactId", "externalId", "sentAt", "contact", "fields", "notes",
     ]);
     expect(body).not.toHaveProperty("previousHandoffId");
-    expect(body).toMatchObject({ ...ENVELOPE, ghlContactId: CONTACT_ID });
+    expect(body).toMatchObject({ ...ENVELOPE, ghlContactId: CONTACT_ID, externalId: "ext-0001" });
 
     expect(body.contact).toEqual({
       firstName: "Testa",

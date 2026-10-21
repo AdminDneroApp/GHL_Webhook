@@ -3,7 +3,6 @@ import { GhlApiError } from "../adapters/ghl";
 import { recordEvent } from "../audit";
 import { flags } from "../config/flags";
 import {
-  EMC_FIELD_EXTERNAL_ID,
   EMC_FIELD_STATUS,
   EMC_FIELD_TIME,
   EMC_HANDOFF_TAG,
@@ -216,7 +215,7 @@ export async function runIntake(input: IntakeInput, deps: Partial<IntakeDeps> = 
   );
 
   // --- GHL side effects, after commit. a revision doesn't change status, so it writes no fields.
-  // a new cycle clears the external id, so GHL never shows the previous cycle's EMC id next to "requested"
+  // the external id is a permanent per-contact id (created at send time), so it is never cleared here
   const failures: GhlFailure[] = [];
   const tagRemoved = await attempt("remove_tag", failures, () =>
     ghl.removeContactTags(ghlContactId, [EMC_HANDOFF_TAG]),
@@ -226,7 +225,6 @@ export async function runIntake(input: IntakeInput, deps: Partial<IntakeDeps> = 
       ghl.updateContactCustomFields(ghlContactId, {
         [EMC_FIELD_STATUS]: "requested",
         [EMC_FIELD_TIME]: ghl.formatGhlDateTime(now()),
-        [EMC_FIELD_EXTERNAL_ID]: null, // the adapter sends null as ""
       }),
     );
   }
