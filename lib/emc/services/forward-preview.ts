@@ -65,7 +65,8 @@ export async function sendPreview(input: PreviewInput, deps: Partial<PreviewDeps
       console.warn("EMC_FORWARD_DEBUG_BODY", JSON.stringify({ forwardId, handoffId, body }));
     }
 
-    const result = await send(body, `${handoffId}:r${revision}`);
+    const debug = flags.EMC_GHL_DEBUG_BODY;
+    const result = await send(body, `${handoffId}:r${revision}`, { captureResponse: debug });
 
     // names and counts only — never values
     console.log("EMC_FORWARD_PREVIEW", JSON.stringify({
@@ -77,11 +78,19 @@ export async function sendPreview(input: PreviewInput, deps: Partial<PreviewDeps
       classification: result.classification,
       ...(result.reason ? { reason: result.reason } : {}),
       externalIdCreated,
+      // EMC's response: size and type only (the text is in EMC_FORWARD_DEBUG_RESPONSE with the debug flag)
+      responseBytes: result.responseBytes ?? 0,
+      ...(result.responseContentType ? { responseContentType: result.responseContentType } : {}),
+      ...(result.externalId ? { emcReturnedExternalId: true } : {}),
       fieldCount: Object.keys(body.contact).length + Object.keys(body.fields).length + 1,
       filledCount: countFilled(body),
       notesCount: body.notes.length,
       warnings,
     }));
+    if (debug && result.responseText !== undefined) {
+      // TESTING ONLY — EMC's response as received; may echo data, so behind the debug flag
+      console.warn("EMC_FORWARD_DEBUG_RESPONSE", JSON.stringify({ forwardId, handoffId, status: result.status, body: result.responseText }));
+    }
   } catch (err) {
     // GhlApiError / EmcConfigError messages carry method, path, status or the env var name, never a body
     const safe = err instanceof GhlApiError || err instanceof EmcConfigError;

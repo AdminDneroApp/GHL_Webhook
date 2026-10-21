@@ -314,6 +314,8 @@ describe("runIntake preview send (EMC_FORWARD_PREVIEW)", () => {
       status: 200,
       classification: "sent",
       externalIdCreated: true,
+      responseBytes: 0,
+      emcReturnedExternalId: true,
       fieldCount: 5, // the stub body: 4 contact keys + notes
       filledCount: 0,
       notesCount: 0,

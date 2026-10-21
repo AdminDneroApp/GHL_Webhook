@@ -14,7 +14,17 @@ export interface EmcSendResult {
   status: number; // HTTP status, 0 when no response arrived
   externalId?: string;
   reason?: "timeout" | "network_error" | "redirect";
+  // what EMC answered: size and type always; the text itself only when asked (callers gate it behind a debug flag)
+  responseBytes?: number;
+  responseContentType?: string;
+  responseText?: string;
 }
+
+export interface EmcSendOptions {
+  captureResponse?: boolean;
+}
+
+const MAX_CAPTURED_CHARS = 2000;
 
 export class EmcConfigError extends Error {
   constructor(message: string) {
@@ -82,7 +92,7 @@ function externalIdFrom(text: string): string | undefined {
   return undefined;
 }
 
-export async function sendToEmc(body: unknown, idempotencyKey: string): Promise<EmcSendResult> {
+export async function sendToEmc(body: unknown, idempotencyKey: string, opts: EmcSendOptions = {}): Promise<EmcSendResult> {
   const url = webhookUrl();
 
   let res: Response;
@@ -107,20 +117,24 @@ export async function sendToEmc(body: unknown, idempotencyKey: string): Promise<
   }
 
   const classification = classifyStatus(res.status);
+  const contentType = res.headers.get("content-type") ?? undefined;
+  // read the (capped) response for every status: its size is logged; its text only when captureResponse
+  const text = await readCapped(res).catch(() => "");
+  const response = {
+    responseBytes: Buffer.byteLength(text, "utf8"),
+    ...(contentType ? { responseContentType: contentType } : {}),
+    ...(opts.captureResponse ? { responseText: text.slice(0, MAX_CAPTURED_CHARS) } : {}),
+  };
+
   if (classification !== "sent") {
-    await res.body?.cancel().catch(() => {});
     return {
       classification,
       status: res.status,
       ...(res.status >= 300 && res.status < 400 ? { reason: "redirect" as const } : {}),
+      ...response,
     };
   }
 
-  let externalId: string | undefined;
-  try {
-    externalId = externalIdFrom(await readCapped(res));
-  } catch {
-    // body read failed after a 2xx: EMC has the lead, just no id
-  }
-  return { classification, status: res.status, ...(externalId ? { externalId } : {}) };
+  const externalId = externalIdFrom(text);
+  return { classification, status: res.status, ...(externalId ? { externalId } : {}), ...response };
 }
