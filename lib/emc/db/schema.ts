@@ -16,7 +16,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { HANDOFF_STATUSES } from "../domain/cycle";
 
-// step 1 tables only. snapshots, encryption, inbound_requests and applied_notes come later.
+// steps 1 and 3. snapshots, encryption and applied_notes come later.
 
 export const REVISION_TYPES = ["create", "update"] as const;
 export type RevisionType = (typeof REVISION_TYPES)[number];
@@ -129,9 +129,28 @@ export const handoffEvents = pgTable(
   ],
 );
 
+export const INBOUND_STATES = ["processing", "completed"] as const;
+export type InboundState = (typeof INBOUND_STATES)[number];
+
+// webhook 3 idempotency (replaces redis). one row per Idempotency-Key, kept after completion so retries replay.
+export const inboundRequests = pgTable(
+  "inbound_requests",
+  {
+    idempotencyKey: text("idempotency_key").primaryKey(),
+    bodyHash: text("body_hash").notNull(),
+    state: text("state", { enum: INBOUND_STATES }).notNull().default("processing"),
+    response: jsonb("response").$type<{ status: number; body: Record<string, unknown> }>(),
+    handoffId: uuid("handoff_id"), // request id of the attempt that holds (or completed) the key
+    createdAt: tsz("created_at").notNull().defaultNow(),
+    updatedAt: tsz("updated_at").notNull().defaultNow(),
+  },
+  () => [check("inbound_requests_state_check", sql`state in ('processing', 'completed')`)],
+);
+
 export type HandoffCycle = typeof handoffCycles.$inferSelect;
 export type NewHandoffCycle = typeof handoffCycles.$inferInsert;
 export type HandoffRevision = typeof handoffRevisions.$inferSelect;
 export type NewHandoffRevision = typeof handoffRevisions.$inferInsert;
 export type HandoffEvent = typeof handoffEvents.$inferSelect;
 export type NewHandoffEvent = typeof handoffEvents.$inferInsert;
+export type InboundRequest = typeof inboundRequests.$inferSelect;

@@ -47,8 +47,4 @@ export const ENV = {
   // ghl → emc — secret(s) our GHL workflows send, and the sub-accounts allowed to trigger the flow
   EMC_GHL_WEBHOOK_TOKENS: process.env.EMC_GHL_WEBHOOK_TOKENS || "",
   EMC_GHL_LOCATION_IDS: process.env.EMC_GHL_LOCATION_IDS || "",
-
-  // redis (upstash REST) — direct upstash names or the ones Vercel's integration injects
-  KV_REST_URL: first("UPSTASH_REDIS_REST_URL", "KV_REST_API_URL") || "",
-  KV_REST_TOKEN: first("UPSTASH_REDIS_REST_TOKEN", "KV_REST_API_TOKEN") || "",
 };

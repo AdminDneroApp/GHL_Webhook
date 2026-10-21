@@ -1,16 +1,27 @@
 import { z } from "zod";
 
-// provisional contract — EMC hasn't shared their payload spec yet.
-// the usual contact fields are typed and normalized; any other field passes through (already
-// sanitized) so we can see what EMC actually sends and tighten this once the spec is agreed.
-export const EmcHandoffSchema = z
-  .looseObject({
-    firstName: z.string().max(100).optional(),
-    lastName: z.string().max(100).optional(),
-    email: z.string().trim().toLowerCase().pipe(z.email()).optional(),
-    phone: z.string().max(40).optional(),
-    tags: z.array(z.string().max(100)).max(50).optional(),
-  })
-  .refine((o) => Object.keys(o).length > 0, { message: "Payload is empty" });
+// webhook 3 contract v1 — EMC's first draft (CONTEXT §4). still lenient: unknown keys pass through
+// (already sanitized) so we can see what EMC actually sends and tighten this once the spec is agreed.
+
+const dropdownValue = z.union([z.string().max(200), z.array(z.string().max(200)).max(50)]);
+
+export const EmcHandoffSchema = z.looseObject({
+  // cycle reference — required
+  handoffId: z.uuid(),
+  revision: z.number().int().min(1),
+  externalId: z.string().min(1).max(200),
+
+  pipelineStage: z.string().min(1).max(200).optional(),
+  fields: z
+    .looseObject({
+      emc_loan_officer: dropdownValue.optional(),
+      add_real_estate_agent: dropdownValue.optional(),
+    })
+    .optional(),
+  notes: z
+    .array(z.object({ title: z.string().max(200), body: z.string().min(1).max(5000) }))
+    .max(50)
+    .optional(),
+});
 
 export type EmcHandoff = z.infer<typeof EmcHandoffSchema>;

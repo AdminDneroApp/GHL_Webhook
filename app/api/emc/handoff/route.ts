@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getClientIp } from "@lib/client-ip";
-import { isKvConfigured } from "@lib/kv";
 import { verifyEmcApiKey, verifyEmcSignature } from "@lib/emc/auth";
 import { claimIdempotencyKey, hashBody, isValidIdempotencyKey } from "@lib/emc/idempotency";
 import { SanitizeError, sanitizePayload } from "@lib/emc/sanitize";
@@ -41,9 +40,6 @@ export async function POST(req: Request) {
     // auth before reading the body — unauthenticated callers never get it parsed
     const auth = verifyEmcApiKey(req, ip);
     if (!auth.ok) return reject(auth.status, auth.reason, { error: AUTH_ERRORS[auth.status] });
-
-    // idempotency is mandatory, so without its store nothing is processed
-    if (!isKvConfigured()) return reject(503, "idempotency_store_not_configured", { error: "Service unavailable" });
 
     const contentType = (req.headers.get("content-type") || "").toLowerCase();
     if (!contentType.includes("application/json")) {
@@ -102,6 +98,7 @@ export async function POST(req: Request) {
     try {
       claim = await claimIdempotencyKey(idempotencyKey, hashBody(raw), handoffId);
     } catch (e) {
+      // idempotency is mandatory, so without its store (neon) nothing is processed
       console.error("EMC_IDEMPOTENCY_STORE_ERROR", JSON.stringify({ handoffId, message: e instanceof Error ? e.message : String(e) }));
       return reply(503, { error: "Service unavailable" });
     }
