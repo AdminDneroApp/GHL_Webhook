@@ -25,16 +25,8 @@ export const CUSTOM_FIELDS = [
   { id: "f_credit", fieldKey: "contact.credit_score", dataType: "TEXT", model: "contact" },
   { id: "f_employment", fieldKey: "contact.employement_status", dataType: "MULTIPLE_OPTIONS", model: "contact" },
   { id: "f_fulltime", fieldKey: "contact.have_you_worked_fulltime_for_the_last_two_years", dataType: "SINGLE_OPTIONS", model: "contact" },
-  {
-    id: "f_bankruptcy",
-    fieldKey: "contact.bankruptcy_in_the_past_year",
-    dataType: "TEXTBOX_LIST",
-    model: "contact",
-    textBoxListOptions: [
-      opt("11111111-aaaa-4aaa-8aaa-000000000001", "Filed by"),
-      opt("11111111-aaaa-4aaa-8aaa-000000000002", "Discharge Date"),
-    ],
-  },
+  { id: "f_bankruptcy", fieldKey: "contact.have_you_filed_for_a_bankruptcy", dataType: "MULTIPLE_OPTIONS", model: "contact" },
+  { id: "f_bankruptcy_date", fieldKey: "contact.if_so_when_did_you_file_bankrupcy", dataType: "DATE", model: "contact" },
   { id: "f_taxes", fieldKey: "contact.taxes_from_the_last_2_years", dataType: "MULTIPLE_OPTIONS", model: "contact" },
   {
     id: "f_cosigner",
@@ -81,20 +73,15 @@ export const CONTACT = {
     { id: "f_credit", value: "700-719" },
     { id: "f_employment", value: "W2" }, // a single string where an array is expected
     { id: "f_fulltime", value: "" },
-    {
-      id: "f_bankruptcy",
-      value: {
-        "11111111-aaaa-4aaa-8aaa-000000000001": "DNERO Agent",
-        "11111111-aaaa-4aaa-8aaa-000000000002": "01/02/2025",
-        "99999999-ffff-4fff-8fff-000000000009": "orphan", // option deleted in GHL
-      },
-    },
+    { id: "f_bankruptcy", value: ["Yes"] },
+    { id: "f_bankruptcy_date", value: "2025-01-02" },
     { id: "f_taxes", value: ["2024", "2025"] },
     {
       id: "f_cosigner",
       value: {
         "22222222-bbbb-4bbb-8bbb-000000000001": "Co Fakerson",
         "22222222-bbbb-4bbb-8bbb-000000000002": "",
+        "99999999-ffff-4fff-8fff-000000000009": "orphan", // option deleted in GHL
       },
     },
     { id: "f_brief", value: "  Wants a lower rate.  " },

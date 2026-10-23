@@ -143,7 +143,7 @@ export async function buildSnapshot(
   return { body, warnings };
 }
 
-// how many of the 27 keys carry a value — a count for logs, never the values
+// how many of the 28 keys carry a value — a count for logs, never the values
 export function countFilled(body: Webhook2Body): number {
   const filled = (v: OutboundValue) => (Array.isArray(v) ? v.length > 0 : v !== null);
   return (

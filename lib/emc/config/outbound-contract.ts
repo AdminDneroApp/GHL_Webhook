@@ -1,4 +1,4 @@
-// webhook 2 (DNERO → EMC): the 27 outbound fields = 4 standard (contact) + 22 custom (fields) + notes.
+// webhook 2 (DNERO → EMC): the 28 outbound fields = 4 standard (contact) + 23 custom (fields) + notes.
 // change fields here. the snapshot builder (services/snapshot.ts) applies each entry's normalizer.
 // CONTEXT §4 Webhook 2, §5.1, §5.2
 
@@ -77,7 +77,8 @@ export const OUTBOUND_CONTRACT: readonly OutboundField[] = [
   custom("credit_score", "text"),
   custom("employement_status", "multi-select"), // typo kept as in GHL
   custom("have_you_worked_fulltime_for_the_last_two_years", "single-select"),
-  custom("bankruptcy_in_the_past_year", "text-box-list"),
+  custom("have_you_filed_for_a_bankruptcy", "multi-select"), // replaces bankruptcy_in_the_past_year
+  custom("if_so_when_did_you_file_bankrupcy", "date"), // date picker; typo kept as in GHL
   custom("taxes_from_the_last_2_years", "multi-select"),
   custom("cosigner_information", "text-box-list"),
   custom("brief_explanation", "text"), // multi line

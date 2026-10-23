@@ -27,12 +27,12 @@ const build = (ghl = mockGhl(), envelope: Webhook2Envelope = ENVELOPE) =>
   buildSnapshot(CONTACT_ID, envelope, { ghl, defaultCountry: "US" });
 
 describe("outbound contract", () => {
-  it("has 27 entries: 4 contact + 22 fields + notes, unique keys", () => {
-    expect(OUTBOUND_CONTRACT).toHaveLength(27);
+  it("has 28 entries: 4 contact + 23 fields + notes, unique keys", () => {
+    expect(OUTBOUND_CONTRACT).toHaveLength(28);
     expect(OUTBOUND_CONTRACT.filter((f) => f.section === "contact")).toHaveLength(4);
-    expect(OUTBOUND_CONTRACT.filter((f) => f.section === "fields")).toHaveLength(22);
+    expect(OUTBOUND_CONTRACT.filter((f) => f.section === "fields")).toHaveLength(23);
     expect(OUTBOUND_CONTRACT.filter((f) => f.section === "notes")).toHaveLength(1);
-    expect(new Set(OUTBOUND_CONTRACT.map((f) => f.outKey)).size).toBe(27);
+    expect(new Set(OUTBOUND_CONTRACT.map((f) => f.outKey)).size).toBe(28);
   });
 });
 
@@ -72,13 +72,14 @@ describe("buildSnapshot", () => {
       credit_score: "700-719",
       employement_status: ["W2"],
       have_you_worked_fulltime_for_the_last_two_years: null,
-      bankruptcy_in_the_past_year: {
-        "Filed by": "DNERO Agent",
-        "Discharge Date": "01/02/2025",
+      have_you_filed_for_a_bankruptcy: ["Yes"],
+      if_so_when_did_you_file_bankrupcy: "2025-01-02",
+      taxes_from_the_last_2_years: ["2024", "2025"],
+      cosigner_information: {
+        "Co-Signer Name": "Co Fakerson",
+        Relationship: null,
         "99999999-ffff-4fff-8fff-000000000009": "orphan",
       },
-      taxes_from_the_last_2_years: ["2024", "2025"],
-      cosigner_information: { "Co-Signer Name": "Co Fakerson", Relationship: null },
       brief_explanation: "Wants a lower rate.",
     });
 
@@ -88,8 +89,8 @@ describe("buildSnapshot", () => {
     ]);
 
     // names and counts only
-    expect(warnings).toEqual(["unknown_option_ids:bankruptcy_in_the_past_year(1)"]);
-    expect(countFilled(body)).toBe(23);
+    expect(warnings).toEqual(["unknown_option_ids:cosigner_information(1)"]);
+    expect(countFilled(body)).toBe(24);
   });
 
   it("every contract key is present with the right type", async () => {
@@ -134,9 +135,10 @@ describe("buildSnapshot", () => {
     expect(body.fields.cosigner_information).toEqual({
       "22222222-bbbb-4bbb-8bbb-000000000001": "Co Fakerson",
       "22222222-bbbb-4bbb-8bbb-000000000002": null,
+      "99999999-ffff-4fff-8fff-000000000009": "orphan",
     });
     expect(warnings).toEqual(
-      expect.arrayContaining(["no_option_labels:cosigner_information", "unknown_option_ids:cosigner_information(2)"]),
+      expect.arrayContaining(["no_option_labels:cosigner_information", "unknown_option_ids:cosigner_information(3)"]),
     );
   });
 
