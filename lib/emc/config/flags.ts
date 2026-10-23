@@ -9,11 +9,11 @@ function envBool(name: string, fallback: boolean): boolean {
 }
 
 export const flags = {
-  // step 1 intake (record cycle/revision, remove tag, mirror status). off until rollout.
+  // intake (record cycle/revision, remove tag, mirror status) + step 2 send to EMC. off until rollout.
   get EMC_INTAKE_ENABLED(): boolean {
     return envBool("EMC_INTAKE_ENABLED", false);
   },
-  // dry run: decide and log, but write nothing to the DB or GHL
+  // dry run: decide and log, but write nothing to the DB or GHL and send nothing to EMC (except the preview)
   get EMC_INTAKE_DRY_RUN(): boolean {
     return envBool("EMC_INTAKE_DRY_RUN", true);
   },

@@ -18,10 +18,12 @@ import {
   withContactLock,
 } from "../db/repositories";
 import { decideTagEvent, type TagDecision } from "../domain/cycle";
+import { forwardRevision, type ForwardDeps } from "./forward";
 import { sendPreview, type PreviewDeps } from "./forward-preview";
 
-// step 1: tag "emc-handoff-requested" added → record a cycle or revision → remove the tag → mirror status.
-// nothing goes to EMC here (step 2), except the dry-run preview send (EMC_FORWARD_PREVIEW). the DB is the source of truth; GHL writes happen after commit and
+// step 1: tag "emc-handoff-requested" added → record a cycle or revision → remove the tag → mirror status,
+// then schedule the step 2 send to EMC (forward.ts) after the response. in dry run only the preview send
+// (EMC_FORWARD_PREVIEW) goes out. the DB is the source of truth; GHL writes happen after commit and
 // are flagged ghl_sync_pending when they fail, so a GHL outage never loses an intake.
 
 export interface IntakeInput {
@@ -44,6 +46,7 @@ export interface IntakeDeps {
   // runs a task after the response is sent (next/server after() in the route)
   after: (task: () => Promise<void>) => void;
   preview: Partial<PreviewDeps>;
+  forward: Partial<ForwardDeps>;
 }
 
 export type IntakeOutcome = "new_cycle" | "revision" | "rejected" | "disabled";
@@ -56,6 +59,7 @@ export interface IntakeResult {
   ghlSyncPending: boolean;
   dryRun: boolean;
   previewScheduled?: true; // dry run + EMC_FORWARD_PREVIEW: a preview send runs after the response
+  sendScheduled?: true; // live: the step 2 send to EMC runs after the response
 }
 
 // resolved only when a preview is scheduled, so tests and non-request callers never touch next/server
@@ -254,6 +258,22 @@ export async function runIntake(input: IntakeInput, deps: Partial<IntakeDeps> = 
     }));
   }
 
+  // --- step 2: send this revision to EMC after the response, so GHL gets its 200 right away
+  const task = () =>
+    forwardRevision(
+      {
+        handoffId: recorded.handoffId,
+        revision: recorded.revision,
+        type: recorded.outcome === "new_cycle" ? "create" : "update",
+        ghlContactId,
+        forwardId,
+        ...(recorded.previousHandoffId ? { previousHandoffId: recorded.previousHandoffId } : {}),
+      },
+      { db, now, ...deps.forward },
+    ).then(() => {});
+  if (deps.after) deps.after(task);
+  else await nextAfter(task);
+
   return {
     outcome: recorded.outcome,
     handoffId: recorded.handoffId,
@@ -261,5 +281,6 @@ export async function runIntake(input: IntakeInput, deps: Partial<IntakeDeps> = 
     ...(recorded.previousHandoffId ? { previousHandoffId: recorded.previousHandoffId } : {}),
     ghlSyncPending,
     dryRun: false,
+    sendScheduled: true,
   };
 }

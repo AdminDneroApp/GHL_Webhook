@@ -6,7 +6,10 @@ export {
   getCycle,
   getLastClosedCycle,
   getRevisions,
+  markRevisionSending,
   setGhlSyncPending,
+  setRevisionSendResult,
+  updateActiveCycle,
   type AddRevisionInput,
   type CreateCycleInput,
 } from "./cycles";

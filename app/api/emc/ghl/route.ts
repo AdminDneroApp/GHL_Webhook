@@ -12,10 +12,12 @@ import { normalizePhone } from "@lib/phone";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// the after() send retries EMC inline (up to 3 × 10s timeouts plus backoff), so leave room for it
+export const maxDuration = 60;
 
 // ghl → emc, step 1: a GHL workflow webhook (tag "emc-handoff-requested" added) enters here, gets sanitized,
-// and the intake service records the cycle/revision, removes the tag and mirrors the status. no EMC send yet,
-// except the dry-run preview send (EMC_FORWARD_PREVIEW), which runs after the response via after().
+// and the intake service records the cycle/revision, removes the tag and mirrors the status. the EMC send
+// (step 2, or the dry-run preview send with EMC_FORWARD_PREVIEW) runs after the response via after().
 // server-to-server only: no OPTIONS / CORS handler, so browsers can't call this route
 const MAX_BODY_BYTES = 256 * 1024;
 
@@ -133,6 +135,7 @@ export async function POST(req: Request) {
       ghlSyncPending: result.ghlSyncPending,
       dryRun: result.dryRun,
       ...(result.previewScheduled ? { previewScheduled: true } : {}),
+      ...(result.sendScheduled ? { sendScheduled: true } : {}),
     }));
 
     return reply(200, {

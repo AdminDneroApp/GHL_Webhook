@@ -112,3 +112,48 @@ export async function getRevisions(db: Executor, handoffId: string): Promise<Han
     .where(eq(handoffRevisions.handoffId, handoffId))
     .orderBy(handoffRevisions.revision);
 }
+
+// step 2: a send attempt starts — revision pending, attempts + 1
+export async function markRevisionSending(db: Executor, handoffId: string, revision: number): Promise<void> {
+  await db
+    .update(handoffRevisions)
+    .set({ sendState: sql`case when ${handoffRevisions.sendState} = 'superseded' then 'superseded' else 'pending' end`, attempts: sql`${handoffRevisions.attempts} + 1` })
+    .where(and(eq(handoffRevisions.handoffId, handoffId), eq(handoffRevisions.revision, revision)));
+}
+
+// step 2: the final result of a revision's send. a superseded revision that still reached EMC is recorded
+// as sent (EMC has it); a superseded one that failed stays superseded
+export async function setRevisionSendResult(
+  db: Executor,
+  handoffId: string,
+  revision: number,
+  result: { sendState: "sent" | "failed"; httpStatus: number },
+): Promise<void> {
+  const sendState =
+    result.sendState === "sent"
+      ? sql`'sent'`
+      : sql`case when ${handoffRevisions.sendState} = 'superseded' then 'superseded' else 'failed' end`;
+  await db
+    .update(handoffRevisions)
+    .set({ sendState, lastHttpStatus: result.httpStatus, nextAttemptAt: null })
+    .where(and(eq(handoffRevisions.handoffId, handoffId), eq(handoffRevisions.revision, revision)));
+}
+
+// step 2: cycle status after a send. returns the updated row, or null when the cycle is no longer active
+// (a closed cycle is never reopened by a late send result)
+export async function updateActiveCycle(
+  tx: Tx,
+  handoffId: string,
+  set: { status: "sent" | "failed" | "completed"; externalId?: string | null },
+): Promise<HandoffCycle | null> {
+  const [row] = await tx
+    .update(handoffCycles)
+    .set({
+      status: set.status,
+      ...(set.externalId ? { externalId: set.externalId } : {}),
+      ...(set.status === "sent" ? {} : { closedAt: new Date() }),
+    })
+    .where(and(eq(handoffCycles.id, handoffId), inArray(handoffCycles.status, ACTIVE)))
+    .returning();
+  return row ?? null;
+}

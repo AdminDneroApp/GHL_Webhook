@@ -43,7 +43,10 @@ const input = (over: Partial<IntakeInput> = {}): IntakeInput => ({
   ...over,
 });
 
-const run = (over: Partial<IntakeInput> = {}) => runIntake(input(over), { db, ghl, now: () => NOW });
+// live sends are scheduled via after(); these tests only collect them (forward.test.ts covers the send)
+let scheduled: (() => Promise<void>)[] = [];
+const after = (t: () => Promise<void>) => void scheduled.push(t);
+const run = (over: Partial<IntakeInput> = {}) => runIntake(input(over), { db, ghl, now: () => NOW, after });
 
 const events = () => db.select().from(handoffEvents).orderBy(handoffEvents.id);
 
@@ -56,6 +59,7 @@ beforeEach(async () => {
   vi.stubEnv("EMC_INTAKE_ENABLED", "true");
   vi.stubEnv("EMC_INTAKE_DRY_RUN", "false");
   ghl = mockGhl();
+  scheduled = [];
 });
 
 afterEach(() => {
@@ -65,8 +69,9 @@ afterEach(() => {
 describe("runIntake", () => {
   it("new cycle → requested, tag removed and status mirrored to GHL", async () => {
     const r = await run();
-    expect(r).toMatchObject({ outcome: "new_cycle", revision: 1, ghlSyncPending: false, dryRun: false });
+    expect(r).toMatchObject({ outcome: "new_cycle", revision: 1, ghlSyncPending: false, dryRun: false, sendScheduled: true });
     expect(r.previousHandoffId).toBeUndefined();
+    expect(scheduled).toHaveLength(1);
 
     const cycle = await getCycle(db, r.handoffId!);
     expect(cycle).toMatchObject({ status: "requested", latestRevision: 1, ghlSyncPending: false, locationId: "loc-1" });
@@ -134,6 +139,7 @@ describe("runIntake", () => {
   it("missing identity → rejected: no cycle, tag removed, note created", async () => {
     const r = await run({ hasIdentity: false });
     expect(r).toEqual({ outcome: "rejected", ghlSyncPending: false, dryRun: false });
+    expect(scheduled).toHaveLength(0);
 
     expect(await db.select().from(handoffCycles)).toHaveLength(0);
     expect(ghl.removeContactTags).toHaveBeenCalledWith("c1", [EMC_HANDOFF_TAG]);
@@ -185,7 +191,7 @@ describe("runIntake", () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     ghl.updateContactCustomFields.mockRejectedValueOnce(new GhlApiError("PUT", "/contacts/c1", 503));
 
-    const r = await runIntake(input(), { db: flaky, ghl, now: () => NOW });
+    const r = await runIntake(input(), { db: flaky, ghl, now: () => NOW, after });
     expect(r).toMatchObject({ outcome: "new_cycle", revision: 1, ghlSyncPending: true, dryRun: false });
     expect(await getCycle(db, r.handoffId!)).toMatchObject({ status: "requested", latestRevision: 1 });
     expect((await events()).map((e) => e.event)).toEqual(["requested"]);
@@ -212,6 +218,7 @@ describe("runIntake", () => {
     expect(await db.select().from(handoffCycles)).toHaveLength(0);
     expect(await events()).toHaveLength(0);
     for (const fn of Object.values(ghl)) expect(fn).not.toHaveBeenCalled();
+    expect(scheduled).toHaveLength(0);
   });
 
   it("dry run with an active cycle → reports the next revision without writing it", async () => {
@@ -370,12 +377,12 @@ describe("runIntake preview send (EMC_FORWARD_PREVIEW)", () => {
     expect(h.tasks).toHaveLength(0);
   });
 
-  it("not dry run → no preview send (live forwarding comes later)", async () => {
+  it("not dry run → the live send is scheduled instead of the preview", async () => {
     const h = previewHarness();
     const r = await runIntake(input(), h.deps);
-    expect(r).toMatchObject({ outcome: "new_cycle", dryRun: false });
+    expect(r).toMatchObject({ outcome: "new_cycle", dryRun: false, sendScheduled: true });
     expect(r.previewScheduled).toBeUndefined();
-    expect(h.tasks).toHaveLength(0);
+    expect(h.tasks).toHaveLength(1);
   });
 
   it("dry run, missing identity → no preview send", async () => {
