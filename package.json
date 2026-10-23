@@ -22,7 +22,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.10",
-    "@types/node": "^20",
+    "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.11",
@@ -32,6 +32,6 @@
     "vitest": "^4.1.12"
   },
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   }
 }
